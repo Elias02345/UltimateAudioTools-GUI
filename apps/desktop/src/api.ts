@@ -28,6 +28,7 @@ export async function api<T>(
 ): Promise<T> {
   return invoke<T>("engine_request", { method, params });
 }
+export const restartApplication = () => invoke<void>("restart_application");
 export const restartRuntime = () => invoke<void>("restart_runtime");
 export const chooseAudio = () => invoke<string[]>("choose_audio");
 export const chooseFolder = () => invoke<string | null>("choose_folder");

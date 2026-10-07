@@ -1,3 +1,4 @@
+import { check } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -40,6 +41,7 @@ import {
   importPreset,
   onEngineEvent,
   restartRuntime,
+  restartApplication,
   reveal,
   time,
   validate,
@@ -1055,7 +1057,9 @@ export function App() {
                       <button
                         onClick={() => void queueAction("process_queue")}
                         disabled={
-                          running || !jobs.some((j) => j.status === "Pending")
+                          runtimeBusy ||
+                          running ||
+                          !jobs.some((j) => j.status === "Pending")
                         }
                       >
                         Process all
@@ -1068,7 +1072,9 @@ export function App() {
                           })
                         }
                         disabled={
-                          running || !jobs.some((j) => j.status === "Pending")
+                          runtimeBusy ||
+                          running ||
+                          !jobs.some((j) => j.status === "Pending")
                         }
                       >
                         Process next
@@ -2036,6 +2042,36 @@ export function App() {
                     }
                   >
                     Run self-test
+                  </button>
+                  <button
+                    disabled={runtimeBusy || jobs.some(activeJob)}
+                    onClick={() =>
+                      void perform("updates", async () => {
+                        const update = await check({ timeout: 20000 });
+                        if (!update) {
+                          notify("You have the latest published version.");
+                          return;
+                        }
+                        setConfirmation({
+                          title: `Update to ${update.version}?`,
+                          body:
+                            update.body ??
+                            "Install the signed application update. Models, presets and recordings are preserved.",
+                          action: "Install and restart",
+                          run: async () => {
+                            await update.downloadAndInstall((event) => {
+                              if (event.event === "Started")
+                                notify(
+                                  "Downloading verified application update…",
+                                );
+                            });
+                            await restartApplication();
+                          },
+                        });
+                      })
+                    }
+                  >
+                    Check for signed updates
                   </button>
                   <button onClick={() => setLicenses(true)}>
                     Open Source & Model Licenses

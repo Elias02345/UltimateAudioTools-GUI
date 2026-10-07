@@ -30,6 +30,8 @@ jobs:
       CARGO_BUILD_JOBS: '3'
       APPIMAGE_EXTRACT_AND_RUN: '1'
       NO_STRIP: '1'
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,6 +58,8 @@ jobs:
         run: python scripts/build_runtime.py --target ${{ matrix.target }}
       - name: Build installable application
         run: npm run package -- --bundles ${{ matrix.bundles }} --ci
+      - name: Checksums and packaged resource audit
+        run: python scripts/check_packages.py --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v4
         with:
           name: separator-${{ matrix.target }}-${{ github.sha }}
@@ -65,5 +69,8 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
             apps/desktop/src-tauri/target/release/bundle/**/*.exe
             apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/**/*.sig
+            apps/desktop/src-tauri/target/release/bundle/**/*.tar.gz
+            apps/desktop/src-tauri/target/release/bundle/SHA256SUMS
             apps/desktop/src-tauri/resources/runtime/manifest.json
           if-no-files-found: error

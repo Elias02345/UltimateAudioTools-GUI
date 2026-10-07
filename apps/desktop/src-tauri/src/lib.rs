@@ -288,6 +288,11 @@ async fn engine_request(app: tauri::AppHandle, method: String, params: Value) ->
 }
 
 #[tauri::command]
+fn restart_application(app: tauri::AppHandle) {
+    app.restart();
+}
+
+#[tauri::command]
 async fn restart_runtime(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         stop_engine(&app.state::<AppState>());
@@ -478,6 +483,7 @@ pub fn run() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -486,6 +492,7 @@ pub fn run() {
             engine_request,
             audio_url,
             restart_runtime,
+            restart_application,
             choose_audio,
             choose_folder,
             reveal_path,
