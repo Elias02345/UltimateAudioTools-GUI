@@ -133,6 +133,7 @@ export function App() {
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
   const [query, setQuery] = useState("");
+  const [historyQuery, setHistoryQuery] = useState("");
   const [modelFilter, setModelFilter] = useState("All");
   const [modelDetail, setModelDetail] = useState<ModelInfo | null>(null);
   const [setupChecks, setSetupChecks] = useState<
@@ -153,9 +154,23 @@ export function App() {
   const [listLimit, setListLimit] = useState(100);
   const allowClose = useRef(false);
   const jobsRef = useRef(jobs);
+  const backgroundRef = useRef({ runtime: false, models: [] as string[] });
   useEffect(() => {
     jobsRef.current = jobs;
   }, [jobs]);
+  useEffect(() => {
+    backgroundRef.current = {
+      runtime: ["copying", "downloading", "installing", "testing"].includes(
+        runtimeInstall.phase,
+      ),
+      models: Object.entries(downloads)
+        .filter(
+          ([, state]) =>
+            !["completed", "cancelled", "failed", "error"].includes(state.kind),
+        )
+        .map(([model]) => model),
+    };
+  }, [runtimeInstall.phase, downloads]);
   const notify = useCallback(
     (message: string, error = false) => setToast({ message, error }),
     [],
@@ -328,18 +343,31 @@ export function App() {
   }, [addFiles]);
   useEffect(() => {
     const unlisten = getCurrentWindow().onCloseRequested((event) => {
-      if (allowClose.current || !jobsRef.current.some(activeJob)) return;
+      const background = backgroundRef.current;
+      if (
+        allowClose.current ||
+        (!jobsRef.current.some(activeJob) &&
+          !background.runtime &&
+          !background.models.length)
+      )
+        return;
       event.preventDefault();
       setConfirmation({
-        title: "Jobs are still processing",
-        body: "Closing Separator will cancel active jobs. Completed audio files are kept.",
-        action: "Cancel jobs and quit",
+        title: "Work is still in progress",
+        body: "Closing Separator will cancel active jobs and downloads. Completed audio files are kept.",
+        action: "Cancel work and quit",
         run: async () => {
-          await Promise.all(
-            jobsRef.current
+          await Promise.all([
+            ...jobsRef.current
               .filter(activeJob)
               .map((j) => api("cancel_job", { id: j.id })),
-          );
+            ...backgroundRef.current.models.map((model) =>
+              api("cancel_download", { model }),
+            ),
+            ...(backgroundRef.current.runtime
+              ? [api("cancel_runtime_install")]
+              : []),
+          ]);
           allowClose.current = true;
           await getCurrentWindow().destroy();
         },
@@ -439,6 +467,13 @@ export function App() {
     (j) => j.id === selectedJob && j.status === "Completed",
   );
   const completed = jobs.filter((j) => j.status === "Completed");
+  const libraryJobs = [...completed]
+    .reverse()
+    .filter((job) =>
+      `${job.source.name} ${job.request.preset.name} ${job.request.preset.models.join(" ")}`
+        .toLowerCase()
+        .includes(historyQuery.toLowerCase()),
+    );
   const active = jobs.find(activeJob);
   const runAgain = (job: Job) => {
     setCustom(structuredClone(job.request.preset));
@@ -473,7 +508,10 @@ export function App() {
   );
   const showSettings = (next: Settings) => setDraftSettings(next);
   const compareResults = jobs.filter(
-    (j) => j.request.comparison_id === compareGroup && j.status === "Completed",
+    (j) =>
+      compareGroup !== null &&
+      j.request.comparison_id === compareGroup &&
+      j.status === "Completed",
   );
 
   if (startup && !settings)
@@ -1120,9 +1158,23 @@ export function App() {
                   </button>
                 </div>
               </div>
-              {(screen === "Library" ? completed : jobs).length ? (
+              {screen === "Library" && (
+                <label className="search">
+                  <Search size={17} />
+                  <input
+                    aria-label="Search history"
+                    placeholder="Find a recording, preset or model…"
+                    value={historyQuery}
+                    onChange={(event) => {
+                      setHistoryQuery(event.target.value);
+                      setListLimit(100);
+                    }}
+                  />
+                </label>
+              )}
+              {(screen === "Library" ? libraryJobs : jobs).length ? (
                 <div className="job-list">
-                  {(screen === "Library" ? [...completed].reverse() : jobs)
+                  {(screen === "Library" ? libraryJobs : jobs)
                     .slice(0, listLimit)
                     .map((job) => (
                       <div
@@ -1268,7 +1320,7 @@ export function App() {
                         </div>
                       </div>
                     ))}
-                  {(screen === "Library" ? completed : jobs).length >
+                  {(screen === "Library" ? libraryJobs : jobs).length >
                     listLimit && (
                     <button onClick={() => setListLimit(listLimit + 100)}>
                       Show 100 more

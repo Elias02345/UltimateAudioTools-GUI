@@ -696,7 +696,7 @@ class Supervisor:
                 "app": __version__,
                 "protocol": PROTOCOL_VERSION,
                 **caps,
-                "model_directory": str(self.model_dir).replace(str(Path.home()), "~"),
+                "model_directory": "[configured model cache]",
                 "logs": "~/[application-data]/Separator/logs",
                 "loaded_model": next(
                     (
@@ -710,6 +710,8 @@ class Supervisor:
             }
         if method == "logs_directory":
             return str(self.root / "logs")
+        if method == "licenses_directory":
+            return str(Path(sys.prefix) / "third-party-licenses")
         if method == "shutdown":
             self.close()
             return True

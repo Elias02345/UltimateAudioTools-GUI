@@ -135,7 +135,12 @@ assert window.js(
 window.js("document.querySelector('[data-testid=play-result]').click()")
 window.screenshot(ROOT / ".test-output/native-acceptance-result.png")
 window.click("Models")
-window.wait_text("Resurrection")
+window.js(
+    "const el=document.querySelector('[aria-label=\"Search models\"]');"
+    "Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'resurrection');"
+    "el.dispatchEvent(new Event('input',{bubbles:true}));"
+)
+window.wait_text(preset["models"][0])
 assert next(m for m in window.engine("list_models") if m["id"] == preset["models"][0])["downloaded"]
 assert hashlib.sha256(source.read_bytes()).hexdigest() == original_hash
 window.click("Presets")

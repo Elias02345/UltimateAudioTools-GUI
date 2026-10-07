@@ -3,6 +3,7 @@
     "resources": {
       "../../../engine/separator_engine/": "engine/separator_engine/",
       "resources/runtime/": "runtime/",
+      "resources/dependency-notices/": "dependency-notices/",
       "../../../runtime/linux-cuda.txt": "runtime-manifests/linux-cuda.txt",
       "../../../runtime/windows-cuda.txt": "runtime-manifests/windows-cuda.txt"
     }

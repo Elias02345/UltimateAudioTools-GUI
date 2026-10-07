@@ -166,6 +166,7 @@ class RuntimeInstaller:
             )
             self.event("testing", "Checking native imports and an actual CUDA matrix operation.")
             probe = str(Path(__file__).with_name("runtime_probe.py"))
+            self.command(python, str(Path(__file__).with_name("license_inventory.py")))
             self.command(python, probe, "--cuda")
             with self.lock:
                 if self.cancelled.is_set():

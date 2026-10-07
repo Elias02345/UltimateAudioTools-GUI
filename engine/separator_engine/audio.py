@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 SUPPORTED = {".wav", ".flac", ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".aiff", ".aif", ".wma", ".mp4"}
@@ -27,7 +28,10 @@ def validate_export(rate: int, fmt: str):
 def ffmpeg() -> str:
     import imageio_ffmpeg
 
-    return os.environ.get("SEPARATOR_FFMPEG") or imageio_ffmpeg.get_ffmpeg_exe()
+    bundled = Path(sys.prefix) / "separator-bin" / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+    return os.environ.get("SEPARATOR_FFMPEG") or (
+        str(bundled) if bundled.is_file() else imageio_ffmpeg.get_ffmpeg_exe()
+    )
 
 
 def run_ffmpeg(args: list[str], timeout: int | None = None) -> None:
@@ -61,7 +65,19 @@ def metadata(value: str) -> dict:
     except (RuntimeError, sf.LibsndfileError):
         # ffprobe is optional: FFmpeg's decoder supplies the fallback metadata.
         proc = subprocess.run(
-            [ffmpeg(), "-nostdin", "-hide_banner", "-i", str(path), "-f", "null", "-"],
+            [
+                ffmpeg(),
+                "-nostdin",
+                "-hide_banner",
+                "-i",
+                str(path),
+                "-map",
+                "0:a:0",
+                "-vn",
+                "-f",
+                "null",
+                "-",
+            ],
             capture_output=True,
             text=True,
             timeout=120,

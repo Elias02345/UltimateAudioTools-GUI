@@ -8,3 +8,4 @@
 - Float intermediates, contextual chunking, lossless exports and original sample-rate preservation.
 - Native playback with streamed previews, waveform seek, mute/solo, loop and blind range comparisons.
 - Reproducible multi-platform packaging and source/runtime validation in GitHub Actions.
+- Isolated optional container processing, explicit comparison cleanup, and source-built FFmpeg with complete corresponding codec sources and bundled license notices.

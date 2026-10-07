@@ -10,6 +10,9 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  validation:
+    if: startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/ci.yml
   package:
     strategy:
       fail-fast: false
@@ -55,18 +58,44 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
+          cache-on-failure: true
       - name: Linux desktop dependencies
         timeout-minutes: 8
         if: runner.os == 'Linux'
         run: sudo timeout 120 apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update && sudo timeout 180 apt-get -o DPkg::Lock::Timeout=60 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf libfuse2 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
       - run: npm ci
       - name: Require signed application updates
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: test -n "$TAURI_SIGNING_PRIVATE_KEY" || { echo 'TAURI_SIGNING_PRIVATE_KEY is required'; exit 1; }
+      - name: Windows codec compiler
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: make tar xz mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-pkgconf
+      - name: Verified codec sources
+        run: python scripts/fetch_ffmpeg_sources.py
+      - uses: actions/cache@v4
+        id: ffmpeg-cache
+        with:
+          path: runtime/build/ffmpeg
+          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('runtime/ffmpeg-sources.json', 'scripts/build_ffmpeg.sh') }}
+      - name: Build FFmpeg from corresponding sources
+        if: runner.os != 'Windows' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash scripts/build_ffmpeg.sh
+      - name: Build Windows FFmpeg from corresponding sources
+        if: runner.os == 'Windows' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: bash scripts/build_ffmpeg.sh
       - name: Build verified private runtime
         run: python scripts/build_runtime.py --target ${{ matrix.target }}
+      - name: Preserve desktop dependency licenses
+        run: python scripts/build_dependency_notices.py
       - name: Build installable application
-        run: npm run package -- --bundles ${{ matrix.bundles }} --ci
+        run: npm run package -- --bundles ${{ matrix.bundles }} --ci --verbose
       - name: Checksums and packaged resource audit
         run: python scripts/check_packages.py --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v4
@@ -82,4 +111,31 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/**/*.tar.gz
             apps/desktop/src-tauri/target/release/bundle/SHA256SUMS
             apps/desktop/src-tauri/resources/runtime/manifest.json
+            runtime/build/FFmpeg-corresponding-source-*.tar.gz
           if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [package, validation]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: separator-*
+          path: release-input
+      - name: Build signature verifier
+        run: cargo build --release --locked --manifest-path scripts/artifact-verifier/Cargo.toml
+      - name: Verify and prepare release
+        run: python scripts/prepare_release.py --input release-input --output release-assets --version '${{ github.ref_name }}' --verifier scripts/artifact-verifier/target/release/separator-artifact-verifier
+      - name: Publish verified release and update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create '${{ github.ref_name }}' release-assets/* --verify-tag --title "Separator ${{ github.ref_name }}" --notes-file docs/RELEASE_NOTES.md

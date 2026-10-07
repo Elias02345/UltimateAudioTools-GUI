@@ -12,11 +12,13 @@ Separator application source is MIT, copyright Elias Kanakidis. Dependency licen
 | ONNX Runtime | MIT, https://github.com/microsoft/onnxruntime |
 | CPython / PBS | Python PSF and bundled component licenses, https://github.com/astral-sh/python-build-standalone/releases/tag/20261003 |
 | imageio-ffmpeg | BSD-2-Clause wrapper, https://github.com/imageio/imageio-ffmpeg |
-| FFmpeg binary | Its build configuration governs LGPL/GPL licensing; Linux 7.0.2 static distribution is GPLv3, https://johnvansickle.com/ffmpeg/ |
+| FFmpeg 9.0.2 | LGPL-2.1-or-later, built from verified original sources; https://ffmpeg.org/releases/ |
+| LAME 3.100 | LGPL, static encoder only; the GPL decoder/frontend are excluded; https://lame.sourceforge.io/ |
+| libogg 1.3.6 / libvorbis 1.3.7 | BSD-style licenses; https://xiph.org/downloads/ |
 | GStreamer | LGPL component licenses, https://gstreamer.freedesktop.org/ |
 | NVIDIA CUDA redistributables | NVIDIA component license terms bundled with the vendor wheels; https://docs.nvidia.com/cuda/eula/ |
 
-FFmpeg corresponding sources/build information are available from the original binary distributor and https://ffmpeg.org/releases/. Preserve the included runtime/native library license files when redistributing packages. Generate and review a complete license inventory for release artifacts; this table highlights major components rather than replacing their full texts.
+The private runtime contains `python/third-party-licenses/index.json` and the original notices from installed Python distributions. `python/third-party-licenses/FFmpeg` contains full codec licenses, the actual binary hash/build configuration, and every exact original source archive with the build script in `corresponding-source.tar.gz`. The same source archive accompanies each platform release. The upstream imageio-ffmpeg vendor executable is removed before packaging. Preserve all included notices and corresponding sources when redistributing packages. This table highlights major components rather than replacing their full texts.
 
 ## Model weights
 

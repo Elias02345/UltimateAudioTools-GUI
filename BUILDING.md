@@ -14,13 +14,16 @@ On Windows use `.venv\Scripts\python.exe`. For development CUDA, install matchin
 ## Complete installer
 
 ```sh
+python scripts/fetch_ffmpeg_sources.py
+bash scripts/build_ffmpeg.sh
 python scripts/build_runtime.py --target linux
+python scripts/build_dependency_notices.py
 npm run package -- --bundles deb,appimage --ci
 ```
 
-Choose `windows`/`macos` and `nsis`/`dmg` on their native build machines. The builder verifies the pinned PBS archive and hash-locked dependencies, tests the private runtime, relocates it and checks imports again. It never installs into global Python. The package command includes the runtime resource overlay. Dependencies that require compilation are built on the build machine, never on the user's first launch.
+Choose `windows`/`macos` and `nsis`/`app,dmg` on their native build machines. FFmpeg compilation needs a C compiler, make, tar, xz and pkg-config. Windows uses MSYS2 UCRT64 with GCC/pkgconf and runs the FFmpeg script in that shell; application compilation still uses MSVC. macOS uses Xcode command-line tools and pkg-config. The builder verifies the pinned PBS archive and hash-locked dependencies, tests the private runtime, relocates it and checks imports again. It never installs into global Python. The package command includes the runtime resource overlay. Dependencies that require compilation are built on the build machine, never on the user's first launch. Run `python scripts/check_packages.py --target linux` (or the matching platform) to probe the installed runtime and exercise its actual audio encoders/decoders.
 
-Set `TAURI_SIGNING_PRIVATE_KEY` and its optional password for signed updater artifacts. OS signing/notarization credentials belong in CI secrets; never commit them. Preserve signing keys for future releases.
+Set `TAURI_SIGNING_PRIVATE_KEY` and its optional password for signed updater artifacts. Local/fork builds without this key produce installers without update artifacts; tagged publication requires the key. OS signing/notarization credentials belong in CI secrets; never commit them. Preserve signing keys for future releases.
 
 ## Checks
 
@@ -50,4 +53,4 @@ PYTHONPATH=engine .venv/bin/python scripts/smoke_runtime_upgrade.py
 
 These checks intentionally download real weights or CUDA wheels and write only application/test-owned outputs. They assert actual device selection, finite samples, channel count, duration and real files. A synthetic fixture is a reproducible execution check, not a music-quality benchmark.
 
-Native UI testing uses `tauri-driver` and WebKitWebDriver on Linux, or the supported Windows WebDriver. `scripts/native_ui.py` contains the actual-window harness. The test environment must supply audio output plugins; Linux AppImages bundle the media framework. [Verified results](docs/STATUS.md).
+Native UI testing uses `tauri-driver` and WebKitWebDriver on Linux, or the supported Windows WebDriver. `scripts/native_ui.py` contains the actual-window harness. Start Vite, build the debug application, and create a tauri-driver session with its executable; save the returned session JSON to `.test-output/webdriver-session.json`. Run `npm run test:e2e` for preset persistence, cancellation/retry and real result playback; run the development Python with `scripts/native_comparison.py` for an actual ranged custom-ensemble comparison and safe cleanup. These tests require cached models, a real audio output backend and available CUDA or CPU; they execute inference. Linux AppImages bundle the media framework. [Verified results](docs/STATUS.md).

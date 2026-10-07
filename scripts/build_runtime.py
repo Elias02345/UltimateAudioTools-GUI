@@ -49,6 +49,9 @@ def build(target: str):
         if not k.startswith(("PYTHON", "PIP_", "UV_")) and k != "VIRTUAL_ENV"
     }
     env["PIP_CONFIG_FILE"] = os.devnull
+    from install_ffmpeg import install
+
+    install(staging / "python", target)
     subprocess.run(
         [
             "uv",
@@ -67,6 +70,10 @@ def build(target: str):
         check=True,
         env=env,
     )
+    # Remove upstream binaries whose exact corresponding sources are unavailable.
+    for vendor_binary in (staging / "python").rglob("imageio_ffmpeg/binaries/ffmpeg*"):
+        if vendor_binary.is_file():
+            vendor_binary.unlink()
     env["PYTHONPATH"] = str(ROOT / "engine")
     env["PYTHONNOUSERSITE"] = "1"
     env["PIP_CONFIG_FILE"] = os.devnull
@@ -76,6 +83,9 @@ def build(target: str):
         "checks=s.self_test(); print(checks); assert all(c['passed'] for c in checks); s.close()"
     )
     subprocess.run([str(python), "-c", probe], check=True, env=env)
+    subprocess.run(
+        [str(python), "-I", str(ROOT / "engine/separator_engine/license_inventory.py")], check=True, env=env
+    )
     versions = subprocess.check_output(
         [str(python), "-I", "-m", "pip", "list", "--format=json"], text=True, env=env
     )
@@ -84,6 +94,7 @@ def build(target: str):
             {
                 "python": manifest["python"],
                 "target": target,
+                "architecture": platform.machine().lower(),
                 "archive_sha256": actual,
                 "packages": json.loads(versions),
             },

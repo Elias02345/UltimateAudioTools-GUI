@@ -60,7 +60,8 @@
     },
     "windows": {
       "nsis": {
-        "displayLanguageSelector": true
+        "displayLanguageSelector": true,
+        "compression": "zlib"
       },
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
@@ -70,6 +71,7 @@
   },
   "plugins": {
     "updater": {
+      "requireSignedVersion": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhCMThGQjU2QUYzNjc3MTIKUldRU2R6YXZWdnNZaXorMGFXRCtnOElzM3ZPa0VnTUt3SXVTUkJnNWpqd1V0YjN4NGlSTHBGaTYK",
       "endpoints": [
         "https://github.com/Elias02345/UltimateAudioTools-GUI/releases/latest/download/latest.json"

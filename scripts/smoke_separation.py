@@ -18,6 +18,7 @@ parser.add_argument("--preset")
 parser.add_argument("--task", default="Both")
 parser.add_argument("--chunk", type=int)
 parser.add_argument("--duration", type=int, default=20)
+parser.add_argument("--engine", choices=["native", "container"], default="native")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 data = root / ".test-data"
@@ -46,8 +47,14 @@ def event(name, **payload):
             )
 
 
-supervisor = Supervisor(root / ".test-state", event)
+supervisor = Supervisor(
+    root / ".test-state" / "container-smoke" if args.engine == "container" else root / ".test-state", event
+)
 try:
+    if args.engine == "container":
+        settings = supervisor.settings.model_copy(deep=True)
+        settings.model_directory = str(root / ".test-state/models")
+        supervisor.dispatch("save_settings", {"settings": settings.model_dump()})
     capabilities = supervisor.capabilities()
     if args.device == "cuda" and not capabilities["cuda"]:
         raise RuntimeError("This CUDA test requires a working NVIDIA backend.")
@@ -57,6 +64,7 @@ try:
     else:
         preset = Preset(id="integration", name="Integration", task="Both", models=[args.model])
     preset.task = args.task
+    preset.engine = args.engine
     preset.parameters.chunk_duration = args.chunk
     preset.parameters.device = args.device
     preset.parameters.precision = args.precision
@@ -77,7 +85,8 @@ try:
     if args.device == "cuda":
         assert all(m["device"].startswith("cuda") for m in job["result"]["models"])
     report_name = (
-        f"{args.preset or args.model}-{args.precision}-{args.device}-{args.duration}s-chunk{args.chunk}.json"
+        f"{args.preset or args.model}-{args.precision}-{args.device}-"
+        f"{args.duration}s-chunk{args.chunk}-{args.engine}.json"
     )
     report = root / ".test-output" / report_name
     report.write_text(json.dumps({"capabilities": capabilities, "job": job}, indent=2))

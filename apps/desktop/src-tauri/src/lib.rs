@@ -250,9 +250,19 @@ fn probe_cuda_runtime(python: &Path, source: &Path) -> Result<(), String> {
         .env_remove("PYTHONHOME")
         .env_remove("VIRTUAL_ENV")
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| e.to_string())?;
+    if let Some(errors) = child.stderr.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(errors).lines().map_while(Result::ok) {
+                log::warn!(
+                    "CUDA startup probe: {}",
+                    line.chars().take(4000).collect::<String>()
+                );
+            }
+        });
+    }
     for _ in 0..300 {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
             return if status.success() {

@@ -9,10 +9,10 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "node scripts/native_acceptance.mjs",
     "lint": "eslint apps/desktop/src tests --max-warnings 0",
     "format": "prettier --write apps/desktop/src packages/shared/*.ts",
-    "package": "tauri build --config apps/desktop/src-tauri/tauri.conf.json --config apps/desktop/src-tauri/tauri.runtime.conf.json",
+    "package": "node scripts/package_application.mjs",
     "tauri": "tauri",
     "schema": "PYTHONPATH=engine .venv/bin/python scripts/generate_schema.py"
   },

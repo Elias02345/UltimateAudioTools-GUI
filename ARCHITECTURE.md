@@ -11,7 +11,7 @@ flowchart LR
   Separator --> Hardware[CUDA / MPS / CPU]
 ```
 
-No listening network service is required. Each request has an id, protocol version, method and validated parameters. Responses carry a result or actionable error. Events are typed separately. ML stdout is redirected away from protocol pipes. Rust survives worker failures and fails outstanding requests when its engine exits.
+Engine requests use pipes and require no listening service. Each request has an id, protocol version, method and validated parameters. Responses carry a result or actionable error. Events are typed separately. ML stdout is redirected away from protocol pipes. Rust survives worker failures and fails outstanding requests when its engine exits. For native audio playback, Rust starts an ephemeral loopback-only HTTP range server with an unpredictable per-process token and an explicit file registry. It streams only approved previews into the webview; it accepts no engine commands and is never exposed to the network.
 
 The queue is serialized, persisted in SQLite and recovers interrupted jobs after a crash. A persistent inference worker reuses a loaded single model when compatible. Changing models unloads the previous instance. Cancellation terminates the inference worker and its child process group, preserving the UI and queue. Temporary outputs are kept in a job-owned directory and only complete, validated audio is published.
 

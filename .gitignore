@@ -9,6 +9,7 @@ target/
 dist/
 runtime/build/
 runtime/downloads/
+runtime/ffmpeg-sources/
 apps/desktop/src-tauri/resources/runtime/
 __pycache__/
 *.pyc
@@ -23,3 +24,4 @@ test-results/
 *.tsbuildinfo
 
 apps/desktop/src-tauri/resources/runtime-staging/
+apps/desktop/src-tauri/resources/dependency-notices/

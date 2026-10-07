@@ -12,6 +12,24 @@ BUNDLE = ROOT / "apps/desktop/src-tauri/target/release/bundle"
 parser = argparse.ArgumentParser()
 parser.add_argument("--target", choices=["linux", "windows", "macos"], required=True)
 args = parser.parse_args()
+
+
+def audit_runtime(python: Path, resources: Path):
+    subprocess.run(
+        [str(python), "-I", str(resources / "engine/separator_engine/runtime_probe.py")], check=True
+    )
+    runtime = resources / "runtime/python"
+    executable = runtime / "separator-bin" / ("ffmpeg.exe" if args.target == "windows" else "ffmpeg")
+    notices = runtime / "third-party-licenses"
+    assert (notices / "index.json").is_file(), "Missing complete Python license inventory"
+    assert (notices / "FFmpeg/corresponding-source.tar.gz").is_file(), "Missing exact FFmpeg sources"
+    assert not list(runtime.rglob("imageio_ffmpeg/binaries/ffmpeg*")), "Unverified vendor FFmpeg shipped"
+    subprocess.run(
+        [str(python), "-I", str(ROOT / "scripts/check_ffmpeg.py"), "--executable", str(executable)],
+        check=True,
+    )
+
+
 expected = {"linux": [".deb", ".AppImage"], "windows": [".exe"], "macos": [".dmg"]}[args.target]
 artifacts = [
     path for path in BUNDLE.rglob("*") if path.is_file() and any(path.name.endswith(ext) for ext in expected)
@@ -30,8 +48,7 @@ if args.target == "linux":
         resources = roots[0].parents[3]
         assert (resources / "engine/separator_engine/server.py").is_file()
         assert (resources / "runtime-manifests/linux-cuda.txt").is_file()
-        probe = resources / "engine/separator_engine/runtime_probe.py"
-        subprocess.run([str(roots[0]), "-I", str(probe)], check=True)
+        audit_runtime(roots[0], resources)
         print("EXTRACTED INSTALLER RUNTIME PASSED", flush=True)
     appimage = next(path for path in artifacts if path.name.endswith(".AppImage"))
     with tempfile.TemporaryDirectory(prefix="Separator AppImage café ") as temp:
@@ -40,19 +57,14 @@ if args.target == "linux":
         )
         roots = list(Path(temp).rglob("runtime/python/bin/python3"))
         assert len(roots) == 1, "AppImage omitted or duplicated its private runtime"
-        subprocess.run(
-            [str(roots[0]), "-I", str(roots[0].parents[3] / "engine/separator_engine/runtime_probe.py")],
-            check=True,
-        )
+        audit_runtime(roots[0], roots[0].parents[3])
 if args.target == "macos":
     apps = list(BUNDLE.rglob("Separator.app"))
     assert apps, "Missing native application bundle"
     resources = apps[0] / "Contents/Resources"
     python = resources / "runtime/python/bin/python3"
     assert python.is_file() and (resources / "engine/separator_engine/server.py").is_file()
-    subprocess.run(
-        [str(python), "-I", str(resources / "engine/separator_engine/runtime_probe.py")], check=True
-    )
+    audit_runtime(python, resources)
 if args.target == "windows":
     installer = next(path for path in artifacts if path.suffix == ".exe")
     with tempfile.TemporaryDirectory(prefix="separator-installed-") as temp:
@@ -62,9 +74,7 @@ if args.target == "windows":
         assert len(roots) == 1, "NSIS installation omitted its private runtime"
         resources = roots[0].parents[2]
         assert (resources / "engine/separator_engine/server.py").is_file()
-        subprocess.run(
-            [str(roots[0]), "-I", str(resources / "engine/separator_engine/runtime_probe.py")], check=True
-        )
+        audit_runtime(roots[0], resources)
 files = [
     path
     for path in BUNDLE.rglob("*")
