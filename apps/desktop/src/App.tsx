@@ -72,7 +72,12 @@ type Initial = {
   running: boolean;
   runtime_install: RuntimeStatus;
 };
-type RuntimeStatus = { phase: string; log: string[]; error: string | null };
+type RuntimeStatus = {
+  phase: string;
+  log: string[];
+  error: string | null;
+  download?: { bytes: number; total: number };
+};
 type DownloadState = {
   kind: string;
   bytes?: number;
@@ -253,6 +258,8 @@ export function App() {
         }
       } else if (event.event === "runtime_install") {
         setRuntimeInstall(event.data as RuntimeStatus);
+      } else if (event.event === "runtime_recovery") {
+        notify(String(event.data.message), true);
       } else if (event.event === "queue_state")
         setRunning(event.data.running === true);
       else if (event.event === "model_download") {
@@ -508,6 +515,19 @@ export function App() {
         </p>
         {runtimeInstall.phase !== "idle" && (
           <p role="status">Runtime installation: {runtimeInstall.phase}</p>
+        )}
+        {runtimeInstall.phase === "downloading" && runtimeInstall.download && (
+          <div>
+            <progress
+              aria-label="Runtime download"
+              max={runtimeInstall.download.total}
+              value={runtimeInstall.download.bytes}
+            />
+            <small>
+              {bytes(runtimeInstall.download.bytes)} of{" "}
+              {bytes(runtimeInstall.download.total)} · current package
+            </small>
+          </div>
         )}
         {runtimeInstall.error && (
           <p className="error-note" role="alert">
@@ -1107,6 +1127,7 @@ export function App() {
                     .map((job) => (
                       <div
                         key={job.id}
+                        data-job-id={job.id}
                         className={`job-row ${activeJob(job) ? "processing" : ""}`}
                       >
                         <span className="file-icon">
@@ -1550,7 +1571,11 @@ export function App() {
               </div>
               <div className="preset-list">
                 {presets.map((preset) => (
-                  <div key={preset.id} className="preset-row">
+                  <div
+                    key={preset.id}
+                    data-preset-id={preset.id}
+                    className="preset-row"
+                  >
                     <span className="file-icon">
                       <Sparkles size={18} />
                     </span>
@@ -1639,6 +1664,31 @@ export function App() {
                 >
                   New comparison
                 </button>
+                {compareGroup && (
+                  <button
+                    disabled={jobs.some(
+                      (j) =>
+                        j.request.comparison_id === compareGroup &&
+                        activeJob(j),
+                    )}
+                    onClick={() =>
+                      setConfirmation({
+                        title: "Delete comparison data?",
+                        body: "Delete this comparison’s temporary outputs and history. Your source recording and exported copies are preserved.",
+                        action: "Delete comparison",
+                        run: async () => {
+                          await api("cleanup_comparison", { id: compareGroup });
+                          setJobs(await api<Job[]>("list_jobs"));
+                          setCompareGroup(null);
+                          setBlind(true);
+                          notify("Comparison data deleted.");
+                        },
+                      })
+                    }
+                  >
+                    Delete comparison data
+                  </button>
+                )}
               </div>
               {compareResults.length ? (
                 <AudioWorkspace
@@ -1735,7 +1785,6 @@ export function App() {
                               presets.find((p) => p.id === id)!,
                             );
                             p.output = structuredClone(settings.output);
-                            p.parameters = structuredClone(settings.parameters);
                             await enqueue(p, [files[0]], group);
                           }
                           setScreen("Compare");
@@ -2033,6 +2082,15 @@ export function App() {
                     }
                   >
                     Copy diagnostics
+                  </button>
+                  <button
+                    onClick={() =>
+                      void perform("logs", async () => {
+                        await reveal(await api<string>("logs_directory"));
+                      })
+                    }
+                  >
+                    Show logs folder
                   </button>
                   <button
                     onClick={() =>

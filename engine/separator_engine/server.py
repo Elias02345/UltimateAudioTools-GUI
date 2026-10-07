@@ -30,7 +30,20 @@ ACTIVE = {"Preparing", "Downloading model", "Loading model", "Processing", "Ense
 
 
 def terminate(proc: subprocess.Popen | None) -> None:
-    if proc is None or proc.poll() is not None:
+    if proc is None:
+        return
+    container_info = getattr(proc, "separator_container", None)
+    if container_info:
+        try:
+            subprocess.run(
+                [container_info[0], "rm", "-f", container_info[1]],
+                capture_output=True,
+                check=False,
+                timeout=15,
+            )
+        except subprocess.SubprocessError:
+            logging.exception("Could not stop application-owned container %s", container_info[1])
+    if proc.poll() is not None:
         return
     try:
         if os.name == "nt":
@@ -54,7 +67,7 @@ class Supervisor:
     def __init__(self, root: Path, emit):
         self.root, self.emit = root.resolve(), emit
         self.root.mkdir(parents=True, exist_ok=True)
-        self.instance_lock = FileLock(self.root / "engine.lock")
+        self.instance_lock = FileLock(self.root / "engine.lock", thread_local=False)
         try:
             self.instance_lock.acquire(timeout=0)
         except Timeout as error:
@@ -122,33 +135,15 @@ class Supervisor:
         ]
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
+        container_info = None
         if settings.engine == "container":
-            runtime = shutil.which(settings.container_command)
-            if not runtime:
-                raise ValueError("The selected container runtime is not installed. Choose Native Runtime.")
-            mounts = {str(self.root), str(self.model_dir)}
-            for job in self.jobs:
-                if job["status"] == "Pending" or job["request"] == active_request:
-                    request = job["request"]
-                    mounts.add(str(Path(request["path"]).parent))
-                    mounts.add(str(Path(request["preset"]["output"]["directory"]).expanduser().resolve()))
-            options = [runtime, "run", "--rm", "-i", "--network", "none"]
-            if settings.parameters.device in {"cuda", "auto"} and settings.container_command == "docker":
-                options += ["--gpus", "all"]
-            for mount in mounts:
-                Path(mount).mkdir(parents=True, exist_ok=True)
-                options += ["--mount", f"type=bind,source={mount},target={mount}"]
-            args = [
-                *options,
-                settings.container_image,
-                "python",
-                "-u",
-                "-m",
-                "separator_engine.worker",
-                "serve",
-                str(self.model_dir),
-                str(self.root),
-            ]
+            from .container import launch
+
+            if active_request is None:
+                raise ValueError("A container needs one assigned separation job.")
+            work = self.work_root / self.current
+            args, name, translated, output = launch(settings, active_request, self.model_dir, work)
+            container_info = (settings.container_command, name, translated, output)
         proc = subprocess.Popen(
             args,
             stdin=subprocess.PIPE,
@@ -160,6 +155,8 @@ class Supervisor:
             env=env,
             start_new_session=os.name != "nt",
         )
+        proc.separator_backend = settings.engine
+        proc.separator_container = container_info
         threading.Thread(target=self.collect_log, args=(proc,), daemon=True).start()
         return proc
 
@@ -169,6 +166,9 @@ class Supervisor:
             logging.getLogger("engine.worker").info(line.rstrip())
 
     def worker_request(self, proc, message: dict, on_event):
+        container_info = getattr(proc, "separator_container", None)
+        if container_info and message["method"] == "run":
+            message = {**message, "request": container_info[2], "work": "/work"}
         proc.stdin.write(json.dumps(message) + "\n")
         proc.stdin.flush()
         for line in proc.stdout:
@@ -178,6 +178,10 @@ class Supervisor:
                 logging.warning("Non-protocol worker output discarded")
                 continue
             if event.get("kind") == "result":
+                if container_info and message["method"] == "run":
+                    from .container import result_paths
+
+                    return result_paths(event["result"], container_info[3])
                 return event["result"]
             if event.get("kind") == "error":
                 raise ValueError(event["error"])
@@ -213,11 +217,21 @@ class Supervisor:
                             "Required models are missing. Download them in Models or enable "
                             "automatic model downloads in Settings."
                         )
+                effective = self.settings.model_copy(
+                    update={"engine": request.preset.engine, "parameters": request.preset.parameters}
+                )
                 with self.lock:
+                    if (
+                        self.worker
+                        and getattr(self.worker, "separator_backend", "native") != effective.engine
+                    ):
+                        terminate(self.worker)
+                        self.worker = None
                     if job["status"] == "Cancelled" or self.stop.is_set():
                         continue
                     if self.worker is None or self.worker.poll() is not None:
-                        self.worker = self.spawn_worker(active_request=job["request"])
+                        # Container assets are prepared on the host before network-isolated inference.
+                        self.worker = self.spawn_worker(effective.model_copy(update={"engine": "native"}))
                     proc = self.worker
 
                 def update(event, job=job):
@@ -238,6 +252,18 @@ class Supervisor:
                             job.update(status="Downloading model", download=event)
                             self.notify_job(job)
 
+                if effective.engine == "container":
+                    from .container import inspect
+
+                    inspect(effective.container_command, effective.container_image)
+                    for model in request.preset.models:
+                        self.worker_request(proc, {"method": "download", "model": model}, update)
+                    terminate(proc)
+                    with self.lock:
+                        if job["status"] == "Cancelled" or self.stop.is_set():
+                            continue
+                        self.worker = self.spawn_worker(effective, active_request=job["request"])
+                        proc = self.worker
                 result = self.worker_request(
                     proc,
                     {"method": "run", "id": job["id"], "request": job["request"], "work": str(work)},
@@ -256,6 +282,9 @@ class Supervisor:
                 if self.worker is not None and self.worker.poll() is not None:
                     self.worker = None
             finally:
+                if self.worker and getattr(self.worker, "separator_container", None):
+                    terminate(self.worker)
+                    self.worker = None
                 if job["status"] in {"Cancelled", "Failed"}:
                     self.cleanup_download_parts(job["request"]["preset"]["models"])
                 shutil.rmtree(work, ignore_errors=True)
@@ -521,12 +550,17 @@ class Supervisor:
                 raise ValueError("Choose between one and 10,000 recordings.")
             added = []
             for request in requests:
+                job_id = uuid.uuid4().hex
                 request.path = str(input_path(request.path))
                 self.catalog.validate_selection(request.preset)
                 if not request.preset.output.directory:
                     request.preset.output = self.settings.output.model_copy(deep=True)
+                if request.comparison_id:
+                    request.preset.output.directory = str(
+                        self.root / "comparisons" / request.comparison_id / job_id
+                    )
                 job = {
-                    "id": uuid.uuid4().hex,
+                    "id": job_id,
                     "status": "Pending",
                     "created_at": time.time(),
                     "request": request.model_dump(),
@@ -590,6 +624,25 @@ class Supervisor:
                         self.jobs.remove(job)
                         self.state.remove_job(job["id"])
             return True
+        if method == "cleanup_comparison":
+            with self.cache_lock, self.lock:
+                group = params["id"]
+                jobs = [j for j in self.jobs if j["request"].get("comparison_id") == group]
+                if not jobs:
+                    raise ValueError("Comparison not found.")
+                if any(j["status"] in ACTIVE or self.current == j["id"] for j in jobs):
+                    raise ValueError("Finish or cancel comparison processing before deleting it.")
+                owned = self.root / "comparisons"
+                directory = owned / group
+                if directory.parent != owned or directory.is_symlink():
+                    raise ValueError("Invalid comparison data path.")
+                # Outputs are created in an application-owned directory; exported copies remain.
+                if directory.exists():
+                    shutil.rmtree(directory)
+                for job in jobs:
+                    self.jobs.remove(job)
+                    self.state.remove_job(job["id"])
+            return True
         if method == "reorder_queue":
             ids = params["ids"]
             with self.lock:
@@ -607,9 +660,10 @@ class Supervisor:
                 self.state.put("user_presets", users + [preset.model_dump()])
             return self.presets()
         if method == "delete_preset":
-            self.state.put(
-                "user_presets", [p for p in self.state.get("user_presets", []) if p["id"] != params["id"]]
-            )
+            with self.lock:
+                self.state.put(
+                    "user_presets", [p for p in self.state.get("user_presets", []) if p["id"] != params["id"]]
+                )
             return self.presets()
         if method == "save_settings":
             settings = Settings.model_validate(params["settings"])
@@ -644,9 +698,18 @@ class Supervisor:
                 **caps,
                 "model_directory": str(self.model_dir).replace(str(Path.home()), "~"),
                 "logs": "~/[application-data]/Separator/logs",
-                "loaded_model": None,
+                "loaded_model": next(
+                    (
+                        j.get("model")
+                        for j in reversed(self.jobs)
+                        if j.get("model") and self.worker is not None
+                    ),
+                    None,
+                ),
                 "privacy": "Audio stays on this computer. No telemetry.",
             }
+        if method == "logs_directory":
+            return str(self.root / "logs")
         if method == "shutdown":
             self.close()
             return True

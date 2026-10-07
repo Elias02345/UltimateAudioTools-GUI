@@ -92,7 +92,7 @@ class JobRequest(StrictModel):
     preset: Preset
     range_start: float | None = Field(default=None, ge=0)
     range_end: float | None = Field(default=None, gt=0)
-    comparison_id: str | None = None
+    comparison_id: str | None = Field(default=None, min_length=1, max_length=120, pattern=r"^[a-zA-Z0-9_-]+$")
     download_consent: bool = False
 
     @model_validator(mode="after")

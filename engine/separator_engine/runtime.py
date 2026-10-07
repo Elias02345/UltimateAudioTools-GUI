@@ -23,7 +23,7 @@ class RuntimeInstaller:
         self.cancelled = threading.Event()
         self.proc = None
         self.thread = None
-        self.file_lock = FileLock(root / "runtime-install.lock")
+        self.file_lock = FileLock(root / "runtime-install.lock", thread_local=False)
         self.last_progress = 0.0
         try:
             with self.file_lock.acquire(timeout=0):
@@ -68,11 +68,16 @@ class RuntimeInstaller:
                 raise ValueError("Install the complete release package before upgrading its private runtime.")
             if shutil.disk_usage(self.root).free < 20 * 1024**3:
                 raise ValueError("At least 20 GB free space is needed for an NVIDIA runtime upgrade.")
+            self.file_lock.acquire(timeout=0)
             self.cancelled.clear()
             self.status = {"phase": "copying", "log": [], "error": None}
-            self.file_lock.acquire(timeout=0)
             self.thread = threading.Thread(target=self.install, args=(base, requirements), daemon=True)
-            self.thread.start()
+            try:
+                self.thread.start()
+            except Exception:
+                self.file_lock.release()
+                self.status = {"phase": "failed", "log": [], "error": "Could not start installation."}
+                raise
         return self.status
 
     def command(self, python, *args):
@@ -118,6 +123,7 @@ class RuntimeInstaller:
         staged = directory / (".staging-" + name)
         final = directory / name
         wheels = directory / (".wheels-" + name)
+        activated = False
         try:
             directory.mkdir(exist_ok=True)
             self.event("copying", "Creating an independent copy of the bundled CPU runtime.")
@@ -184,14 +190,17 @@ class RuntimeInstaller:
                         stream.flush()
                         os.fsync(stream.fileno())
                     os.replace(temp, pointer)
+                    activated = True
                 finally:
                     temp.unlink(missing_ok=True)
-            self.event("completed", "NVIDIA acceleration is ready. Restart the engine to use it.")
+                self.event("completed", "NVIDIA acceleration is ready. Restart the engine to use it.")
         except Exception as error:
             self.event("cancelled" if self.cancelled.is_set() else "failed", error=str(error))
         finally:
             shutil.rmtree(staged, ignore_errors=True)
             shutil.rmtree(wheels, ignore_errors=True)
+            if not activated:
+                shutil.rmtree(final, ignore_errors=True)
             self.file_lock.release()
 
     def copy_file(self, source, destination):

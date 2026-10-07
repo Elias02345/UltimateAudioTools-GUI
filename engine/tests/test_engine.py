@@ -303,3 +303,35 @@ def test_cancel_cleanup_leaves_other_owned_partials(tmp_path):
         assert all(not p.with_suffix(p.suffix + ".part").exists() for p in paths)
     finally:
         supervisor.close()
+
+
+def test_comparison_cleanup_preserves_source_and_normal_outputs(supervisor, recording, tmp_path):
+    preset = Preset.model_validate(supervisor.presets()[0])
+    request = JobRequest(path=str(recording), preset=preset, comparison_id="safe-group")
+    job = supervisor.dispatch("enqueue", {"requests": [request.model_dump()]})[0]
+    owned = Path(job["request"]["preset"]["output"]["directory"])
+    owned.mkdir(parents=True)
+    (owned / "result.flac").write_bytes(b"temporary result")
+    exported = tmp_path / "exported.flac"
+    exported.write_bytes(b"exported copy")
+    source = recording.read_bytes()
+    supervisor.dispatch("cleanup_comparison", {"id": "safe-group"})
+    assert not owned.exists() and not supervisor.jobs
+    assert recording.read_bytes() == source
+    assert exported.read_bytes() == b"exported copy"
+
+
+def test_comparison_cleanup_refuses_active_jobs(supervisor, recording):
+    preset = Preset.model_validate(supervisor.presets()[0])
+    job = supervisor.dispatch(
+        "enqueue",
+        {
+            "requests": [
+                JobRequest(path=str(recording), preset=preset, comparison_id="active-group").model_dump()
+            ]
+        },
+    )[0]
+    job["status"] = "Processing"
+    with pytest.raises(ValueError, match="Finish or cancel"):
+        supervisor.dispatch("cleanup_comparison", {"id": "active-group"})
+    job["status"] = "Cancelled"

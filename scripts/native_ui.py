@@ -3,6 +3,7 @@
 import base64
 import json
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -17,7 +18,11 @@ class NativeWindow:
             data=None if data is None else json.dumps(data).encode(),
             headers={"Content-Type": "application/json"},
         )
-        value = json.loads(urllib.request.urlopen(req, timeout=120).read())["value"]
+        try:
+            payload = urllib.request.urlopen(req, timeout=120).read()
+        except urllib.error.HTTPError as error:
+            raise RuntimeError(error.read().decode()) from error
+        value = json.loads(payload)["value"]
         if isinstance(value, dict) and "error" in value:
             raise RuntimeError(value)
         return value
@@ -61,6 +66,63 @@ class NativeWindow:
 
     def screenshot(self, path):
         Path(path).write_bytes(base64.b64decode(self.call("/screenshot")))
+
+    def engine(self, method, **params):
+        result = self.invoke("engine_request", {"method": method, "params": params})
+        if "error" in result:
+            raise RuntimeError(result["error"])
+        return result["ok"]
+
+    def wait(self, check, seconds=120):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            result = check()
+            if result:
+                return result
+            time.sleep(0.2)
+        raise AssertionError(f"Native UI condition timed out: {self.text()}")
+
+    def set_label(self, label, value, scope="document"):
+        self.js(
+            "const root=arguments[2]==='document'?document:document.querySelector(arguments[2]);"
+            "const label=[...root.querySelectorAll('label')]"
+            ".find(l=>l.firstChild.textContent.trim()===arguments[0]);"
+            "if(!label)throw new Error('Missing label '+arguments[0]);"
+            "const el=label.querySelector('input,select');"
+            "const proto=el.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype;"
+            "Object.getOwnPropertyDescriptor(proto,'value').set.call(el,arguments[1]);"
+            "el.dispatchEvent(new Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}));",
+            label,
+            value,
+            scope,
+        )
+
+    def click_row(self, attribute, value, button):
+        self.js(
+            "const row=document.querySelector('['+arguments[0]+'=\"'+arguments[1]+'\"]');"
+            "if(!row)throw new Error('Missing row '+arguments[1]);"
+            "const b=[...row.querySelectorAll('button')]"
+            ".find(b=>b.textContent.trim()===arguments[2]||b.getAttribute('aria-label')===arguments[2]);"
+            "if(!b||b.disabled)throw new Error('Missing or disabled action '+arguments[2]);b.click();",
+            attribute,
+            value,
+            button,
+        )
+
+    def drop(self, path):
+        path = Path(path).resolve()
+        for _ in range(20):
+            self.invoke(
+                "plugin:event|emit",
+                {
+                    "event": "tauri://drag-drop",
+                    "payload": {"paths": [str(path)], "position": {"x": 600, "y": 300}},
+                },
+            )
+            time.sleep(0.3)
+            if path.name in self.text():
+                return
+        raise AssertionError("Native drag-drop did not import " + str(path))
 
 
 if __name__ == "__main__":

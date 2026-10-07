@@ -43,6 +43,12 @@ def build(target: str):
         stream.extractall(staging, filter="data")
     python = staging / "python" / ("python.exe" if target == "windows" else "bin/python3")
     requirements = ROOT / "runtime" / details["requirements"]
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith(("PYTHON", "PIP_", "UV_")) and k != "VIRTUAL_ENV"
+    }
+    env["PIP_CONFIG_FILE"] = os.devnull
     subprocess.run(
         [
             "uv",
@@ -59,12 +65,8 @@ def build(target: str):
             str(requirements),
         ],
         check=True,
+        env=env,
     )
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if not k.startswith(("PYTHON", "PIP_", "UV_")) and k != "VIRTUAL_ENV"
-    }
     env["PYTHONPATH"] = str(ROOT / "engine")
     env["PYTHONNOUSERSITE"] = "1"
     env["PIP_CONFIG_FILE"] = os.devnull
@@ -74,7 +76,9 @@ def build(target: str):
         "checks=s.self_test(); print(checks); assert all(c['passed'] for c in checks); s.close()"
     )
     subprocess.run([str(python), "-c", probe], check=True, env=env)
-    versions = subprocess.check_output([str(python), "-m", "pip", "list", "--format=json"], text=True)
+    versions = subprocess.check_output(
+        [str(python), "-I", "-m", "pip", "list", "--format=json"], text=True, env=env
+    )
     (staging / "manifest.json").write_text(
         json.dumps(
             {

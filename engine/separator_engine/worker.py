@@ -100,6 +100,10 @@ class Engine:
                                             "Cached model failed its publisher checksum. Delete it and retry."
                                         )
                             return
+                    if os.environ.get("SEPARATOR_OFFLINE") == "1":
+                        raise ValueError(
+                            f"Container asset {output.name} is missing. Prepare it in the host Model Manager."
+                        )
                     partial = output.with_suffix(output.suffix + ".part")
                     started = time.monotonic()
                     digest = hashlib.sha256()

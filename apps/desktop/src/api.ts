@@ -26,7 +26,14 @@ export async function api<T>(
   method: string,
   params: Record<string, unknown> = {},
 ): Promise<T> {
-  return invoke<T>("engine_request", { method, params });
+  try {
+    return await invoke<T>("engine_request", { method, params });
+  } catch (error) {
+    void invoke("frontend_log", {
+      message: `${method}: ${String(error)}`,
+    }).catch(() => {});
+    throw error;
+  }
 }
 export const restartApplication = () => invoke<void>("restart_application");
 export const restartRuntime = () => invoke<void>("restart_runtime");

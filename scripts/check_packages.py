@@ -33,6 +33,17 @@ if args.target == "linux":
         probe = resources / "engine/separator_engine/runtime_probe.py"
         subprocess.run([str(roots[0]), "-I", str(probe)], check=True)
         print("EXTRACTED INSTALLER RUNTIME PASSED", flush=True)
+    appimage = next(path for path in artifacts if path.name.endswith(".AppImage"))
+    with tempfile.TemporaryDirectory(prefix="Separator AppImage café ") as temp:
+        subprocess.run(
+            [str(appimage.resolve()), "--appimage-extract"], cwd=temp, check=True, stdout=subprocess.DEVNULL
+        )
+        roots = list(Path(temp).rglob("runtime/python/bin/python3"))
+        assert len(roots) == 1, "AppImage omitted or duplicated its private runtime"
+        subprocess.run(
+            [str(roots[0]), "-I", str(roots[0].parents[3] / "engine/separator_engine/runtime_probe.py")],
+            check=True,
+        )
 if args.target == "macos":
     apps = list(BUNDLE.rglob("Separator.app"))
     assert apps, "Missing native application bundle"
@@ -43,12 +54,17 @@ if args.target == "macos":
         [str(python), "-I", str(resources / "engine/separator_engine/runtime_probe.py")], check=True
     )
 if args.target == "windows":
-    runtime = ROOT / "apps/desktop/src-tauri/resources/runtime/python"
-    assert (runtime / "python.exe").is_file()
-    subprocess.run(
-        [str(runtime / "python.exe"), "-I", str(ROOT / "engine/separator_engine/runtime_probe.py")],
-        check=True,
-    )
+    installer = next(path for path in artifacts if path.suffix == ".exe")
+    with tempfile.TemporaryDirectory(prefix="separator-installed-") as temp:
+        destination = Path(temp) / "app"
+        subprocess.run([str(installer.resolve()), "/S", f"/D={destination}"], check=True, timeout=240)
+        roots = list(destination.rglob("runtime/python/python.exe"))
+        assert len(roots) == 1, "NSIS installation omitted its private runtime"
+        resources = roots[0].parents[2]
+        assert (resources / "engine/separator_engine/server.py").is_file()
+        subprocess.run(
+            [str(roots[0]), "-I", str(resources / "engine/separator_engine/runtime_probe.py")], check=True
+        )
 files = [
     path
     for path in BUNDLE.rglob("*")

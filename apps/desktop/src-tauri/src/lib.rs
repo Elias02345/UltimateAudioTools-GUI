@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+mod logs;
 mod media;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
@@ -44,10 +45,9 @@ fn runtime_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
         .join("active-runtime.json");
     if let Ok(bytes) = std::fs::read(pointer) {
         if let Ok(value) = serde_json::from_slice::<Value>(&bytes) {
-            if value.get("version").and_then(Value::as_str) != Some(env!("CARGO_PKG_VERSION")) {
-                return bundled_runtime(&resources, &source);
-            }
-            if let Some(name) = value.get("directory").and_then(Value::as_str) {
+            if let Some(name) = value.get("directory").and_then(Value::as_str).filter(|_| {
+                value.get("version").and_then(Value::as_str) == Some(env!("CARGO_PKG_VERSION"))
+            }) {
                 if name.starts_with("cuda-")
                     && name
                         .chars()
@@ -69,6 +69,10 @@ fn runtime_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
                                 && manifest.get("backend").and_then(Value::as_str) == Some("cuda")
                                 && manifest.get("platform").and_then(Value::as_str)
                                     == Some(if cfg!(windows) { "Windows" } else { "Linux" })
+                                && manifest
+                                    .get("architecture")
+                                    .and_then(Value::as_str)
+                                    .is_some_and(|arch| matches!(arch, "x86_64" | "amd64"))
                         });
                     if valid && root.join(python_relative).is_file() {
                         return Ok((root.join(python_relative), source.clone()));
@@ -99,7 +103,11 @@ fn runtime_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
 }
 
 fn bundled_runtime(resources: &Path, source: &Path) -> Result<(PathBuf, PathBuf), String> {
-    let root = resources.join("runtime/python");
+    let root = if cfg!(debug_assertions) {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/runtime/python")
+    } else {
+        resources.join("runtime/python")
+    };
     let python = root.join(if cfg!(windows) {
         "python.exe"
     } else {
@@ -113,8 +121,20 @@ fn bundled_runtime(resources: &Path, source: &Path) -> Result<(PathBuf, PathBuf)
 }
 
 fn start_engine(app: &tauri::AppHandle) -> Result<Arc<Engine>, String> {
-    let (python, source) = runtime_paths(app)?;
+    let (mut python, source) = runtime_paths(app)?;
     let resources = app.path().resource_dir().map_err(|e| e.to_string())?;
+    if python
+        .components()
+        .any(|part| part.as_os_str().to_string_lossy().starts_with("cuda-"))
+    {
+        if let Err(error) = probe_cuda_runtime(&python, &source) {
+            log::warn!("Private CUDA runtime failed startup validation; using CPU: {error}");
+            python = bundled_runtime(&resources, &source)?.0;
+            let _ = app.emit("engine-event", json!({"v":1,"event":"runtime_recovery","data":{
+                "message":"NVIDIA runtime could not start. The bundled CPU runtime is active. Reinstall acceleration in Settings."
+            }}));
+        }
+    }
     let runtime_base = if cfg!(debug_assertions) {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/runtime/python")
     } else {
@@ -222,6 +242,32 @@ fn start_engine(app: &tauri::AppHandle) -> Result<Arc<Engine>, String> {
     }))
 }
 
+fn probe_cuda_runtime(python: &Path, source: &Path) -> Result<(), String> {
+    let mut child = Command::new(python)
+        .arg("-I")
+        .arg(source.join("separator_engine/runtime_probe.py"))
+        .arg("--cuda")
+        .env_remove("PYTHONHOME")
+        .env_remove("VIRTUAL_ENV")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    for _ in 0..300 {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            return if status.success() {
+                Ok(())
+            } else {
+                Err(format!("Probe exited with {status}"))
+            };
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    Err("CUDA startup probe timed out".into())
+}
+
 fn request_engine(app: tauri::AppHandle, method: String, params: Value) -> Reply {
     if method.len() > 80 || !params.is_object() {
         return Err("Invalid engine request".into());
@@ -285,6 +331,11 @@ async fn engine_request(app: tauri::AppHandle, method: String, params: Value) ->
     tauri::async_runtime::spawn_blocking(move || request_engine(app, method, params))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn frontend_log(message: String) {
+    log::warn!("ui: {}", message.chars().take(4000).collect::<String>());
 }
 
 #[tauri::command]
@@ -483,6 +534,10 @@ pub fn run() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
     let app = tauri::Builder::default()
+        .setup(|app| {
+            logs::initialize(&app.path().app_local_data_dir()?.join("logs"))?;
+            Ok(())
+        })
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -490,6 +545,7 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             engine_request,
+            frontend_log,
             audio_url,
             restart_runtime,
             restart_application,

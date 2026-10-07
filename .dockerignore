@@ -1,0 +1,7 @@
+**
+!engine/
+!engine/separator_engine/
+!engine/separator_engine/**
+!container/
+!container/Dockerfile
+**/__pycache__
