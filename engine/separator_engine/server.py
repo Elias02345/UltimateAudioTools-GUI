@@ -510,7 +510,7 @@ class Supervisor:
                     params.get("range_end"),
                 )
         if (
-            method in {"enqueue", "process_all", "process_next"}
+            method in {"enqueue", "process_queue"}
             and self.runtime_installer.thread
             and self.runtime_installer.thread.is_alive()
         ):
