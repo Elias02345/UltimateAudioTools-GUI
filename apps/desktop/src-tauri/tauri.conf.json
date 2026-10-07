@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Separator",
+  "version": "0.1.0",
+  "identifier": "de.eliaskanakidis.separator",
+  "build": {
+    "beforeDevCommand": "npm run dev:ui",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../../../dist"
+  },
+  "app": {
+    "windows": [{ "title": "Separator", "width": 1240, "height": 820, "minWidth": 900, "minHeight": 640 }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost blob:; connect-src ipc: http://ipc.localhost 'self'; font-src 'self' data:; object-src 'none'; base-uri 'self'",
+      "assetProtocol": { "enable": true, "scope": [] }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Music",
+    "shortDescription": "High-quality local audio stem separation",
+    "longDescription": "Separate vocals, instruments and more with RoFormer models and custom ensembles. Audio stays on your computer.",
+    "resources": { "../../../engine/separator_engine/": "engine/separator_engine/" },
+    "linux": { "deb": { "depends": ["gstreamer1.0-plugins-good", "gstreamer1.0-plugins-bad", "gstreamer1.0-libav"] } },
+    "macOS": { "minimumSystemVersion": "14.0" },
+    "windows": { "nsis": { "displayLanguageSelector": true }, "webviewInstallMode": { "type": "downloadBootstrapper" } }
+  }
+}

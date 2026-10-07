@@ -1,0 +1,1 @@
+{"desktop":{"identifier":"desktop","description":"Local desktop dialogs, window and approved external links","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-close","core:window:allow-destroy","dialog:default","opener:default"]}}

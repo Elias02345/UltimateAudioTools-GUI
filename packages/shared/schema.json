@@ -1,0 +1,1216 @@
+{
+  "$defs": {
+    "AudioMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "duration": {
+          "title": "Duration",
+          "type": "number"
+        },
+        "sample_rate": {
+          "title": "Sample Rate",
+          "type": "integer"
+        },
+        "channels": {
+          "title": "Channels",
+          "type": "integer"
+        },
+        "codec": {
+          "title": "Codec",
+          "type": "string"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        },
+        "bitrate": {
+          "title": "Bitrate",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "name",
+        "duration",
+        "sample_rate",
+        "channels",
+        "codec",
+        "size",
+        "bitrate"
+      ],
+      "title": "AudioMetadata",
+      "type": "object"
+    },
+    "Capabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "title": "Platform",
+          "type": "string"
+        },
+        "architecture": {
+          "title": "Architecture",
+          "type": "string"
+        },
+        "cpu": {
+          "title": "Cpu",
+          "type": "string"
+        },
+        "ram": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ram"
+        },
+        "gpus": {
+          "items": {
+            "$ref": "#/$defs/GPUInfo"
+          },
+          "title": "Gpus",
+          "type": "array"
+        },
+        "cuda": {
+          "title": "Cuda",
+          "type": "boolean"
+        },
+        "cuda_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cuda Version"
+        },
+        "mps": {
+          "title": "Mps",
+          "type": "boolean"
+        },
+        "mlx": {
+          "title": "Mlx",
+          "type": "boolean"
+        },
+        "directml": {
+          "title": "Directml",
+          "type": "boolean"
+        },
+        "python": {
+          "title": "Python",
+          "type": "string"
+        },
+        "torch": {
+          "title": "Torch",
+          "type": "string"
+        },
+        "engine_version": {
+          "title": "Engine Version",
+          "type": "string"
+        },
+        "ffmpeg": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ffmpeg"
+        },
+        "disk_free": {
+          "title": "Disk Free",
+          "type": "integer"
+        },
+        "backends": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Backends",
+          "type": "array"
+        },
+        "recommended_device": {
+          "title": "Recommended Device",
+          "type": "string"
+        },
+        "containers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Containers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "platform",
+        "architecture",
+        "cpu",
+        "ram",
+        "gpus",
+        "cuda",
+        "cuda_version",
+        "mps",
+        "mlx",
+        "directml",
+        "python",
+        "torch",
+        "engine_version",
+        "ffmpeg",
+        "disk_free",
+        "backends",
+        "recommended_device",
+        "containers"
+      ],
+      "title": "Capabilities",
+      "type": "object"
+    },
+    "GPUInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "vram": {
+          "title": "Vram",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index",
+        "name",
+        "vram"
+      ],
+      "title": "GPUInfo",
+      "type": "object"
+    },
+    "InferenceSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "cpu",
+            "cuda",
+            "mps"
+          ],
+          "title": "Device",
+          "type": "string"
+        },
+        "gpu_index": {
+          "default": 0,
+          "maximum": 16,
+          "minimum": 0,
+          "title": "Gpu Index",
+          "type": "integer"
+        },
+        "precision": {
+          "default": "float32",
+          "enum": [
+            "float32",
+            "autocast",
+            "float16"
+          ],
+          "title": "Precision",
+          "type": "string"
+        },
+        "overlap": {
+          "anyOf": [
+            {
+              "maximum": 16,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Overlap"
+        },
+        "segment_size": {
+          "anyOf": [
+            {
+              "maximum": 4096,
+              "minimum": 64,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Segment Size"
+        },
+        "batch_size": {
+          "default": 1,
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Batch Size",
+          "type": "integer"
+        },
+        "mdx_overlap": {
+          "default": 0.25,
+          "exclusiveMaximum": 1,
+          "minimum": 0,
+          "title": "Mdx Overlap",
+          "type": "number"
+        },
+        "mdx_segment_size": {
+          "default": 256,
+          "maximum": 4096,
+          "minimum": 32,
+          "title": "Mdx Segment Size",
+          "type": "integer"
+        },
+        "denoise": {
+          "default": false,
+          "title": "Denoise",
+          "type": "boolean"
+        },
+        "vr_aggression": {
+          "default": 5,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Vr Aggression",
+          "type": "integer"
+        },
+        "vr_tta": {
+          "default": false,
+          "title": "Vr Tta",
+          "type": "boolean"
+        },
+        "demucs_shifts": {
+          "default": 2,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Demucs Shifts",
+          "type": "integer"
+        },
+        "torch_compile": {
+          "default": false,
+          "title": "Torch Compile",
+          "type": "boolean"
+        },
+        "chunk_duration": {
+          "anyOf": [
+            {
+              "maximum": 3600,
+              "minimum": 10,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chunk Duration"
+        }
+      },
+      "required": [
+        "device",
+        "gpu_index",
+        "precision",
+        "overlap",
+        "segment_size",
+        "batch_size",
+        "mdx_overlap",
+        "mdx_segment_size",
+        "denoise",
+        "vr_aggression",
+        "vr_tta",
+        "demucs_shifts",
+        "torch_compile",
+        "chunk_duration"
+      ],
+      "title": "InferenceSettings",
+      "type": "object"
+    },
+    "Job": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "Pending",
+            "Preparing",
+            "Downloading model",
+            "Loading model",
+            "Processing",
+            "Ensembling",
+            "Encoding",
+            "Completed",
+            "Failed",
+            "Cancelled",
+            "Interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "number"
+        },
+        "request": {
+          "$ref": "#/$defs/JobRequest"
+        },
+        "source": {
+          "$ref": "#/$defs/AudioMetadata"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JobResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device"
+        },
+        "pass_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pass Index"
+        },
+        "pass_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pass Count"
+        },
+        "download": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Download"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "created_at",
+        "request",
+        "source",
+        "error",
+        "result",
+        "started_at",
+        "completed_at",
+        "stage",
+        "model",
+        "device",
+        "pass_index",
+        "pass_count",
+        "download"
+      ],
+      "title": "Job",
+      "type": "object"
+    },
+    "JobRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "preset": {
+          "$ref": "#/$defs/Preset"
+        },
+        "range_start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Range Start"
+        },
+        "range_end": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Range End"
+        },
+        "comparison_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comparison Id"
+        },
+        "download_consent": {
+          "default": false,
+          "title": "Download Consent",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "preset",
+        "range_start",
+        "range_end",
+        "comparison_id",
+        "download_consent"
+      ],
+      "title": "JobRequest",
+      "type": "object"
+    },
+    "JobResult": {
+      "additionalProperties": false,
+      "properties": {
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/OutputResult"
+          },
+          "title": "Outputs",
+          "type": "array"
+        },
+        "device": {
+          "title": "Device",
+          "type": "string"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/ModelExecution"
+          },
+          "title": "Models",
+          "type": "array"
+        },
+        "engine": {
+          "title": "Engine",
+          "type": "string"
+        },
+        "engine_version": {
+          "title": "Engine Version",
+          "type": "string"
+        },
+        "elapsed": {
+          "title": "Elapsed",
+          "type": "number"
+        },
+        "peak_vram": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Peak Vram"
+        }
+      },
+      "required": [
+        "outputs",
+        "device",
+        "models",
+        "engine",
+        "engine_version",
+        "elapsed",
+        "peak_vram"
+      ],
+      "title": "JobResult",
+      "type": "object"
+    },
+    "ModelExecution": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "device": {
+          "title": "Device",
+          "type": "string"
+        },
+        "precision": {
+          "title": "Precision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "device",
+        "precision"
+      ],
+      "title": "ModelExecution",
+      "type": "object"
+    },
+    "ModelInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "family": {
+          "title": "Family",
+          "type": "string"
+        },
+        "architecture": {
+          "title": "Architecture",
+          "type": "string"
+        },
+        "stems": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Stems",
+          "type": "array"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "downloaded": {
+          "title": "Downloaded",
+          "type": "boolean"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Size"
+        },
+        "disk_usage": {
+          "title": "Disk Usage",
+          "type": "integer"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sha256"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "license": {
+          "title": "License",
+          "type": "string"
+        },
+        "vip": {
+          "title": "Vip",
+          "type": "boolean"
+        },
+        "download_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Download Files",
+          "type": "array"
+        },
+        "physical_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Physical Files",
+          "type": "array"
+        },
+        "benchmark": {
+          "title": "Benchmark",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "family",
+        "architecture",
+        "stems",
+        "target",
+        "downloaded",
+        "size",
+        "disk_usage",
+        "path",
+        "sha256",
+        "source",
+        "license",
+        "vip",
+        "download_files",
+        "physical_files",
+        "benchmark"
+      ],
+      "title": "ModelInfo",
+      "type": "object"
+    },
+    "OutputResult": {
+      "additionalProperties": false,
+      "properties": {
+        "stem": {
+          "title": "Stem",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "duration": {
+          "title": "Duration",
+          "type": "number"
+        },
+        "sample_rate": {
+          "title": "Sample Rate",
+          "type": "integer"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stem",
+        "path",
+        "duration",
+        "sample_rate",
+        "size"
+      ],
+      "title": "OutputResult",
+      "type": "object"
+    },
+    "OutputSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": "",
+          "title": "Directory",
+          "type": "string"
+        },
+        "format": {
+          "default": "FLAC",
+          "enum": [
+            "FLAC",
+            "WAV",
+            "MP3",
+            "OGG",
+            "M4A"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "sample_rate": {
+          "default": 0,
+          "enum": [
+            0,
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "title": "Sample Rate",
+          "type": "integer"
+        },
+        "bitrate": {
+          "default": 320,
+          "enum": [
+            128,
+            192,
+            256,
+            320
+          ],
+          "title": "Bitrate",
+          "type": "integer"
+        },
+        "normalization": {
+          "default": 0.98,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Normalization",
+          "type": "number"
+        },
+        "template": {
+          "default": "{original} - {stem}",
+          "maxLength": 180,
+          "minLength": 1,
+          "title": "Template",
+          "type": "string"
+        },
+        "subfolder": {
+          "default": true,
+          "title": "Subfolder",
+          "type": "boolean"
+        },
+        "collision": {
+          "default": "unique",
+          "enum": [
+            "unique",
+            "overwrite",
+            "ask"
+          ],
+          "title": "Collision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "directory",
+        "format",
+        "sample_rate",
+        "bitrate",
+        "normalization",
+        "template",
+        "subfolder",
+        "collision"
+      ],
+      "title": "OutputSettings",
+      "type": "object"
+    },
+    "Preset": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "id": {
+          "maxLength": 120,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Description",
+          "type": "string"
+        },
+        "task": {
+          "default": "Both",
+          "enum": [
+            "Vocals",
+            "Instrumental",
+            "Both",
+            "Drums",
+            "Bass",
+            "Other",
+            "4 Stems",
+            "All"
+          ],
+          "title": "Task",
+          "type": "string"
+        },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Models",
+          "type": "array"
+        },
+        "algorithm": {
+          "default": "avg_fft",
+          "enum": [
+            "avg_wave",
+            "avg_fft",
+            "median_wave",
+            "median_fft",
+            "min_wave",
+            "max_wave",
+            "min_fft",
+            "max_fft",
+            "uvr_max_spec",
+            "uvr_min_spec",
+            "ensemble_wav"
+          ],
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "weights": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weights"
+        },
+        "engine": {
+          "default": "native",
+          "enum": [
+            "native",
+            "container"
+          ],
+          "title": "Engine",
+          "type": "string"
+        },
+        "parameters": {
+          "$ref": "#/$defs/InferenceSettings"
+        },
+        "output": {
+          "$ref": "#/$defs/OutputSettings"
+        },
+        "builtin": {
+          "default": false,
+          "title": "Builtin",
+          "type": "boolean"
+        },
+        "quality": {
+          "default": "Custom",
+          "enum": [
+            "Fast",
+            "Balanced",
+            "Ultra",
+            "Custom"
+          ],
+          "title": "Quality",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "id",
+        "name",
+        "description",
+        "task",
+        "models",
+        "algorithm",
+        "weights",
+        "engine",
+        "parameters",
+        "output",
+        "builtin",
+        "quality"
+      ],
+      "title": "Preset",
+      "type": "object"
+    },
+    "Request": {
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1,
+          "title": "V",
+          "type": "integer"
+        },
+        "id": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "method": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "v",
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Request",
+      "type": "object"
+    },
+    "Settings": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "setup_complete": {
+          "default": false,
+          "title": "Setup Complete",
+          "type": "boolean"
+        },
+        "output": {
+          "$ref": "#/$defs/OutputSettings"
+        },
+        "parameters": {
+          "$ref": "#/$defs/InferenceSettings"
+        },
+        "auto_download": {
+          "default": false,
+          "title": "Auto Download",
+          "type": "boolean"
+        },
+        "theme": {
+          "default": "dark",
+          "enum": [
+            "dark",
+            "light",
+            "system"
+          ],
+          "title": "Theme",
+          "type": "string"
+        },
+        "reduced_motion": {
+          "default": false,
+          "title": "Reduced Motion",
+          "type": "boolean"
+        },
+        "notifications": {
+          "default": false,
+          "title": "Notifications",
+          "type": "boolean"
+        },
+        "default_quality": {
+          "default": "Ultra",
+          "enum": [
+            "Fast",
+            "Balanced",
+            "Ultra"
+          ],
+          "title": "Default Quality",
+          "type": "string"
+        },
+        "model_directory": {
+          "default": "",
+          "title": "Model Directory",
+          "type": "string"
+        },
+        "engine": {
+          "default": "native",
+          "enum": [
+            "native",
+            "container"
+          ],
+          "title": "Engine",
+          "type": "string"
+        },
+        "container_command": {
+          "default": "docker",
+          "enum": [
+            "docker",
+            "podman"
+          ],
+          "title": "Container Command",
+          "type": "string"
+        },
+        "container_image": {
+          "default": "separator-engine:0.1.0",
+          "title": "Container Image",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "setup_complete",
+        "output",
+        "parameters",
+        "auto_download",
+        "theme",
+        "reduced_motion",
+        "notifications",
+        "default_quality",
+        "model_directory",
+        "engine",
+        "container_command",
+        "container_image"
+      ],
+      "title": "Settings",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "request": {
+      "$ref": "#/$defs/Request"
+    },
+    "preset": {
+      "$ref": "#/$defs/Preset"
+    },
+    "settings": {
+      "$ref": "#/$defs/Settings"
+    },
+    "job": {
+      "$ref": "#/$defs/Job"
+    },
+    "model": {
+      "$ref": "#/$defs/ModelInfo"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/Capabilities"
+    }
+  },
+  "required": [
+    "request",
+    "preset",
+    "settings",
+    "job",
+    "model",
+    "capabilities"
+  ],
+  "title": "Contract",
+  "type": "object"
+}
