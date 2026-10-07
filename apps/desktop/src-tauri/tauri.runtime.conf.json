@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "resources": {
+      "../../../engine/separator_engine/": "engine/separator_engine/",
+      "resources/runtime/": "runtime/",
+      "../../../runtime/linux-cuda.txt": "runtime-manifests/linux-cuda.txt",
+      "../../../runtime/windows-cuda.txt": "runtime-manifests/windows-cuda.txt"
+    }
+  }
+}

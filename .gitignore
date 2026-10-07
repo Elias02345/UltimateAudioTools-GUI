@@ -21,3 +21,5 @@ test-results/
 *.key
 
 *.tsbuildinfo
+
+apps/desktop/src-tauri/resources/runtime-staging/

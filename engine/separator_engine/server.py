@@ -16,11 +16,13 @@ import time
 import uuid
 from pathlib import Path
 
+from filelock import FileLock, Timeout
 from platformdirs import user_data_dir
 
 from . import PROTOCOL_VERSION, __version__
 from .audio import clear_cache, directory_size, ffmpeg, input_path, metadata, preview, waveform
 from .catalog import Catalog, builtin_presets
+from .runtime import RuntimeInstaller
 from .schema import Job, JobRequest, Preset, Request, Settings
 from .state import State
 
@@ -51,6 +53,14 @@ def terminate(proc: subprocess.Popen | None) -> None:
 class Supervisor:
     def __init__(self, root: Path, emit):
         self.root, self.emit = root.resolve(), emit
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.instance_lock = FileLock(self.root / "engine.lock")
+        try:
+            self.instance_lock.acquire(timeout=0)
+        except Timeout as error:
+            raise RuntimeError(
+                "Another Separator instance is using this data folder. Close it before restarting."
+            ) from error
         self.state = State(self.root)
         raw_settings = self.state.get("settings", {})
         self.settings = Settings.model_validate(raw_settings)
@@ -80,6 +90,7 @@ class Supervisor:
         self.current = None
         self.downloads = {}
         self.capability_cache = None
+        self.runtime_installer = RuntimeInstaller(self.root, self.emit, terminate)
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         self.queue_thread = threading.Thread(target=self.queue_loop, daemon=True)
         self.queue_thread.start()
@@ -245,6 +256,8 @@ class Supervisor:
                 if self.worker is not None and self.worker.poll() is not None:
                     self.worker = None
             finally:
+                if job["status"] in {"Cancelled", "Failed"}:
+                    self.cleanup_download_parts(job["request"]["preset"]["models"])
                 shutil.rmtree(work, ignore_errors=True)
                 output_dir = Path(job["request"]["preset"]["output"]["directory"])
                 for temp in output_dir.glob(f"**/.separator-{job['id']}-*.part"):
@@ -265,6 +278,19 @@ class Supervisor:
         for i in range(torch.cuda.device_count()):
             prop = torch.cuda.get_device_properties(i)
             gpus.append({"index": i, "name": prop.name, "vram": prop.total_memory})
+        if not gpus and shutil.which("nvidia-smi"):
+            try:
+                detected = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                for line in detected.stdout.splitlines():
+                    index, name, memory = [part.strip() for part in line.split(",", 2)]
+                    gpus.append({"index": int(index), "name": name, "vram": int(memory) * 1024**2})
+            except (ValueError, subprocess.TimeoutExpired):
+                pass
         mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
         ram = None
         try:
@@ -286,13 +312,16 @@ class Supervisor:
             "mps": mps,
             "mlx": False,
             "directml": False,
+            "cuda_installable": bool(gpus)
+            and not torch.cuda.is_available()
+            and bool(os.environ.get("SEPARATOR_RUNTIME_BASE")),
             "python": platform.python_version(),
             "torch": torch.__version__,
             "engine_version": importlib.metadata.version("audio-separator"),
             "ffmpeg": command.stdout.splitlines()[0] if command.returncode == 0 else None,
             "disk_free": shutil.disk_usage(self.root).free,
-            "backends": ["cpu"] + (["cuda"] if gpus else []) + (["mps"] if mps else []),
-            "recommended_device": "cuda" if gpus else "mps" if mps else "cpu",
+            "backends": ["cpu"] + (["cuda"] if torch.cuda.is_available() else []) + (["mps"] if mps else []),
+            "recommended_device": "cuda" if torch.cuda.is_available() else "mps" if mps else "cpu",
             "containers": [c for c in ["docker", "podman"] if shutil.which(c)],
         }
         self.capability_cache = info
@@ -378,17 +407,32 @@ class Supervisor:
                 self.emit(
                     "model_download",
                     model=model,
-                    kind="cancelled" if model not in self.downloads else "failed",
+                    kind="cancelled" if self.downloads.get(model) is not proc else "failed",
                     error=str(error),
                 )
             finally:
                 terminate(proc)
+                self.cleanup_download_parts([model])
                 with self.lock:
                     if self.downloads.get(model) is proc:
                         self.downloads.pop(model, None)
 
         self.pool.submit(task)
         return {"model": model}
+
+    def cleanup_download_parts(self, models):
+        from filelock import FileLock, Timeout
+
+        entries = {entry["id"]: entry for entry in self.catalog.list()}
+        for model in models:
+            for filename in entries.get(model, {}).get("physical_files", []):
+                path = self.model_dir / filename
+                try:
+                    with FileLock(str(path) + ".lock", timeout=0):
+                        path.with_suffix(path.suffix + ".part").unlink(missing_ok=True)
+                except Timeout:
+                    # Another worker now owns this asset; never remove its partial.
+                    pass
 
     def dispatch(self, method: str, params: dict):
         if self.stop.is_set() and method != "shutdown":
@@ -401,11 +445,23 @@ class Supervisor:
                 "jobs": [Job.model_validate(j).model_dump() for j in self.jobs],
                 "presets": self.presets(),
                 "running": self.running,
+                "runtime_install": self.runtime_installer.status,
             }
+        if method == "install_acceleration":
+            with self.lock:
+                if self.current or self.downloads:
+                    raise ValueError("Finish or cancel processing and downloads before changing the runtime.")
+                return self.runtime_installer.start()
+        if method == "cancel_runtime_install":
+            self.runtime_installer.cancel()
+            return True
+        if method == "runtime_install_status":
+            return self.runtime_installer.status
         if method == "get_capabilities":
             return self.capabilities(params.get("refresh", False))
         if method == "self_test":
-            return self.self_test()
+            with self.cache_lock:
+                return self.self_test()
         if method == "list_models":
             return self.catalog.list(params.get("refresh", False))
         if method == "verify_models":
@@ -416,6 +472,7 @@ class Supervisor:
             with self.lock:
                 proc = self.downloads.pop(params["model"], None)
             terminate(proc)
+            self.cleanup_download_parts([params["model"]])
             return True
         if method == "remove_model":
             with self.lock:
@@ -452,6 +509,12 @@ class Supervisor:
                     params.get("range_start"),
                     params.get("range_end"),
                 )
+        if (
+            method in {"enqueue", "process_all", "process_next"}
+            and self.runtime_installer.thread
+            and self.runtime_installer.thread.is_alive()
+        ):
+            raise ValueError("Finish or cancel runtime installation before starting processing.")
         if method == "enqueue":
             requests = [JobRequest.model_validate(r) for r in params["requests"]]
             if not requests or len(requests) > 10000:
@@ -539,8 +602,9 @@ class Supervisor:
             if preset.builtin or preset.id in {p["id"] for p in builtin_presets()}:
                 raise ValueError("Duplicate a built-in preset before editing it.")
             self.catalog.validate_selection(preset)
-            users = [p for p in self.state.get("user_presets", []) if p["id"] != preset.id]
-            self.state.put("user_presets", users + [preset.model_dump()])
+            with self.lock:
+                users = [p for p in self.state.get("user_presets", []) if p["id"] != preset.id]
+                self.state.put("user_presets", users + [preset.model_dump()])
             return self.presets()
         if method == "delete_preset":
             self.state.put(
@@ -589,6 +653,7 @@ class Supervisor:
         raise ValueError(f"Unknown engine method: {method}")
 
     def close(self):
+        self.runtime_installer.close()
         with self.lock:
             self.stop.set()
             self.running = False
@@ -596,6 +661,9 @@ class Supervisor:
         self.wake.set()
         for proc in workers:
             terminate(proc)
+
+        self.queue_thread.join(timeout=6)
+        self.instance_lock.release()
 
 
 def main():
@@ -618,6 +686,11 @@ def main():
         write({"v": PROTOCOL_VERSION, "event": event, "data": data})
 
     supervisor = Supervisor(root, emit)
+
+    def stopped(_signal, _frame):
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, stopped)
 
     def handle(request):
         try:

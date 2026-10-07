@@ -1,0 +1,9 @@
+audio-separator==0.47.0
+pydantic==2.13.5
+platformdirs==4.12.3
+imageio-ffmpeg==0.6.0
+soundfile==0.14.0
+filelock==4.0.12
+audioread==3.0.1
+psutil==7.2.2
+pip==26.2

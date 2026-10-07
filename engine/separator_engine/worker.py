@@ -183,7 +183,7 @@ class Engine:
                 use_autocast=settings.precision == "autocast",
                 use_native_fp16=settings.precision == "float16",
                 use_torch_compile=settings.torch_compile,
-                chunk_duration=settings.chunk_duration,
+                chunk_duration=None,
                 mdxc_params={
                     "segment_size": settings.segment_size or 256,
                     "override_model_segment_size": settings.segment_size is not None,
@@ -270,6 +270,8 @@ class Engine:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             separator.load_model(model)
+            # Preserve floating-point model levels; apply one ceiling after ensembling.
+            separator.model_instance.normalization_threshold = float("inf")
             actual_device = str(getattr(separator.model_instance, "torch_device", separator.torch_device))
             emit(
                 "stage",
@@ -280,7 +282,14 @@ class Engine:
                 pass_count=len(request.preset.models),
             )
             # Float input ensures the upstream writer preserves float intermediate samples.
-            outputs = separator.separate(str(decoded))
+            if request.preset.parameters.chunk_duration:
+                from .chunking import separate_chunks
+
+                outputs = separate_chunks(
+                    separator, decoded, model_dir, request.preset.parameters.chunk_duration
+                )
+            else:
+                outputs = separator.separate(str(decoded))
             if not outputs:
                 raise ValueError("The engine produced no output stems.")
             labels = []
@@ -427,6 +436,10 @@ def main():
     import signal
     import threading
 
+    def cancelled(_signal, _frame):
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, cancelled)
     parent_pid = os.getppid()
 
     def parent_watchdog():

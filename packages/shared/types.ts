@@ -7,15 +7,7 @@ export type Version = 1;
 export type Id1 = string;
 export type Name = string;
 export type Description = string;
-export type Task =
-  | "Vocals"
-  | "Instrumental"
-  | "Both"
-  | "Drums"
-  | "Bass"
-  | "Other"
-  | "4 Stems"
-  | "All";
+export type Task = "Vocals" | "Instrumental" | "Both" | "Drums" | "Bass" | "Other" | "4 Stems" | "All";
 /**
  * @minItems 1
  * @maxItems 8
@@ -149,6 +141,7 @@ export type Name3 = string;
 export type Vram = number;
 export type Gpus = GPUInfo[];
 export type Cuda = boolean;
+export type CudaInstallable = boolean;
 export type CudaVersion = string | null;
 export type Mps = boolean;
 export type Mlx = boolean;
@@ -317,6 +310,7 @@ export interface Capabilities {
   ram: Ram;
   gpus: Gpus;
   cuda: Cuda;
+  cuda_installable: CudaInstallable;
   cuda_version: CudaVersion;
   mps: Mps;
   mlx: Mlx;

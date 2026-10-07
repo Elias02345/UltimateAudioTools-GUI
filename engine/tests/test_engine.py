@@ -1,5 +1,6 @@
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -234,9 +235,9 @@ def test_offline_catalog_and_empty_checkpoint(tmp_path, monkeypatch):
 
 
 def test_comparison_preview_uses_same_range_and_cache_key(tmp_path):
-    from separator_engine.audio import preview
     import numpy as np
     import soundfile as sf
+    from separator_engine.audio import preview
 
     source = tmp_path / "range.wav"
     sf.write(
@@ -253,3 +254,52 @@ def test_comparison_preview_uses_same_range_and_cache_key(tmp_path):
     assert preview(str(source), tmp_path / "previews", 0, 1) != clip
     with pytest.raises(ValueError):
         preview(str(source), tmp_path / "previews", 2, 1)
+
+
+def test_float_chunks_preserve_levels_boundaries_and_frames(tmp_path):
+    from types import SimpleNamespace
+
+    from separator_engine.chunking import separate_chunks
+
+    source = tmp_path / "long.wav"
+    samples = np.random.default_rng(3).uniform(-1.3, 1.3, (25 * 1000, 2)).astype(np.float32)
+    sf.write(source, samples, 1000, subtype="FLOAT")
+
+    class FloatEngine:
+        def __init__(self):
+            self.output_dir = str(tmp_path)
+            self.model_instance = SimpleNamespace(output_dir=self.output_dir)
+
+        def separate(self, path):
+            assert sf.info(path).subtype == "FLOAT"
+            audio, rate = sf.read(path, dtype="float32", always_2d=True)
+            target = Path(self.output_dir) / "input_(Vocals).wav"
+            sf.write(target, audio, rate, subtype="FLOAT")
+            return [target.name]
+
+    engine = FloatEngine()
+    outputs = separate_chunks(engine, source, tmp_path, 10)
+    actual, rate = sf.read(outputs[0], dtype="float32", always_2d=True)
+    assert rate == 1000 and actual.shape == samples.shape
+    np.testing.assert_allclose(actual, samples, atol=2e-7)
+    assert sf.info(outputs[0]).subtype == "FLOAT"
+    assert engine.model_instance.output_dir == str(tmp_path)
+
+
+def test_cancel_cleanup_leaves_other_owned_partials(tmp_path):
+    from filelock import FileLock
+
+    supervisor = Supervisor(tmp_path, lambda *_a, **_kw: None)
+    try:
+        entry = next(m for m in supervisor.catalog.list() if m["id"] == "melband_roformer_inst_v1e_plus.ckpt")
+        filenames = entry["physical_files"]
+        paths = [supervisor.model_dir / name for name in filenames]
+        for path in paths:
+            path.with_suffix(path.suffix + ".part").write_bytes(b"partial")
+        with FileLock(str(paths[0]) + ".lock"):
+            supervisor.cleanup_download_parts([entry["id"]])
+            assert paths[0].with_suffix(paths[0].suffix + ".part").exists()
+        supervisor.cleanup_download_parts([entry["id"]])
+        assert all(not p.with_suffix(p.suffix + ".part").exists() for p in paths)
+    finally:
+        supervisor.close()

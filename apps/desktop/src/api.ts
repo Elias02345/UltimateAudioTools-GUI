@@ -1,4 +1,4 @@
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import Ajv from "ajv";
 import schema from "../../../packages/shared/schema.json";
@@ -28,10 +28,11 @@ export async function api<T>(
 ): Promise<T> {
   return invoke<T>("engine_request", { method, params });
 }
+export const restartRuntime = () => invoke<void>("restart_runtime");
 export const chooseAudio = () => invoke<string[]>("choose_audio");
 export const chooseFolder = () => invoke<string | null>("choose_folder");
 export const reveal = (path: string) => invoke("reveal_path", { path });
-export const mediaUrl = (path: string) => convertFileSrc(path);
+export const mediaUrl = (path: string) => invoke<string>("audio_url", { path });
 export const exportAudio = (paths: string[]) =>
   invoke<string | null>("export_audio", { paths });
 export const exportPreset = (preset: Preset) =>

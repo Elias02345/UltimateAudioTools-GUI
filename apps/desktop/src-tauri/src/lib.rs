@@ -1,5 +1,6 @@
 use serde_json::{json, Value};
-use std::collections::HashMap;
+mod media;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -20,24 +21,67 @@ struct Engine {
 #[derive(Default)]
 struct AppState {
     engine: Mutex<Option<Arc<Engine>>>,
+    media: Mutex<Option<Arc<media::MediaServer>>>,
+    approved_previews: Mutex<HashSet<PathBuf>>,
 }
 
 fn runtime_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
     let resources = app.path().resource_dir().map_err(|e| e.to_string())?;
-    let installed = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("runtime");
+    let source = if cfg!(debug_assertions) {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../engine")
+    } else {
+        resources.join("engine")
+    };
     let python_relative = if cfg!(windows) {
         "python.exe"
     } else {
         "bin/python3"
     };
-    for root in [installed, resources.join("runtime/python")] {
+    let pointer = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("active-runtime.json");
+    if let Ok(bytes) = std::fs::read(pointer) {
+        if let Ok(value) = serde_json::from_slice::<Value>(&bytes) {
+            if value.get("version").and_then(Value::as_str) != Some(env!("CARGO_PKG_VERSION")) {
+                return bundled_runtime(&resources, &source);
+            }
+            if let Some(name) = value.get("directory").and_then(Value::as_str) {
+                if name.starts_with("cuda-")
+                    && name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+                {
+                    let root = app
+                        .path()
+                        .app_local_data_dir()
+                        .map_err(|e| e.to_string())?
+                        .join("runtimes")
+                        .join(name);
+                    let valid = std::fs::read(root.join("separator-runtime.json"))
+                        .ok()
+                        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                        .is_some_and(|manifest| {
+                            manifest.get("complete").and_then(Value::as_bool) == Some(true)
+                                && manifest.get("version").and_then(Value::as_str)
+                                    == Some(env!("CARGO_PKG_VERSION"))
+                                && manifest.get("backend").and_then(Value::as_str) == Some("cuda")
+                                && manifest.get("platform").and_then(Value::as_str)
+                                    == Some(if cfg!(windows) { "Windows" } else { "Linux" })
+                        });
+                    if valid && root.join(python_relative).is_file() {
+                        return Ok((root.join(python_relative), source.clone()));
+                    }
+                }
+            }
+        }
+    }
+    {
+        let root = resources.join("runtime/python");
         let python = root.join(python_relative);
         if python.is_file() {
-            return Ok((python, resources.join("engine")));
+            return Ok((python, source.clone()));
         }
     }
     if cfg!(debug_assertions) {
@@ -54,8 +98,33 @@ fn runtime_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
     Err("The private processing runtime is missing. Install the complete Separator package or repair the runtime in Setup.".into())
 }
 
+fn bundled_runtime(resources: &Path, source: &Path) -> Result<(PathBuf, PathBuf), String> {
+    let root = resources.join("runtime/python");
+    let python = root.join(if cfg!(windows) {
+        "python.exe"
+    } else {
+        "bin/python3"
+    });
+    if python.is_file() {
+        Ok((python, source.to_path_buf()))
+    } else {
+        Err("The bundled CPU runtime is missing. Reinstall the complete package.".into())
+    }
+}
+
 fn start_engine(app: &tauri::AppHandle) -> Result<Arc<Engine>, String> {
     let (python, source) = runtime_paths(app)?;
+    let resources = app.path().resource_dir().map_err(|e| e.to_string())?;
+    let runtime_base = if cfg!(debug_assertions) {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/runtime/python")
+    } else {
+        resources.join("runtime/python")
+    };
+    let runtime_manifests = if cfg!(debug_assertions) {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../runtime")
+    } else {
+        resources.join("runtime-manifests")
+    };
     let data = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
     let mut command = Command::new(python);
@@ -64,6 +133,11 @@ fn start_engine(app: &tauri::AppHandle) -> Result<Arc<Engine>, String> {
         .env("PYTHONPATH", source)
         .env("SEPARATOR_DATA_DIR", data)
         .env("PYTHONUNBUFFERED", "1")
+        .env("PYTHONNOUSERSITE", "1")
+        .env_remove("PYTHONHOME")
+        .env_remove("VIRTUAL_ENV")
+        .env("SEPARATOR_RUNTIME_BASE", runtime_base)
+        .env("SEPARATOR_RUNTIME_MANIFESTS", runtime_manifests)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -196,6 +270,11 @@ fn request_engine(app: tauri::AppHandle, method: String, params: Value) -> Reply
     if method == "preview" {
         if let Ok(Value::String(path)) = &result {
             let _ = app.asset_protocol_scope().allow_file(path);
+            if let Ok(path) = Path::new(path).canonicalize() {
+                if let Ok(mut previews) = state.approved_previews.lock() {
+                    previews.insert(path);
+                }
+            }
         }
     }
     result
@@ -206,6 +285,34 @@ async fn engine_request(app: tauri::AppHandle, method: String, params: Value) ->
     tauri::async_runtime::spawn_blocking(move || request_engine(app, method, params))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn restart_runtime(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        stop_engine(&app.state::<AppState>());
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn audio_url(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    let state = app.state::<AppState>();
+    let path = Path::new(&path).canonicalize().map_err(|e| e.to_string())?;
+    if !state
+        .approved_previews
+        .lock()
+        .map_err(|_| "Audio authorization lock failed")?
+        .contains(&path)
+    {
+        return Err("Audio preview has not been prepared by this application.".into());
+    }
+    let mut guard = state.media.lock().map_err(|_| "Audio server lock failed")?;
+    if guard.is_none() {
+        *guard = Some(media::MediaServer::start()?);
+    }
+    guard.as_ref().ok_or("Audio server unavailable")?.url(&path)
 }
 
 #[tauri::command]
@@ -377,6 +484,8 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             engine_request,
+            audio_url,
+            restart_runtime,
             choose_audio,
             choose_folder,
             reveal_path,
@@ -388,7 +497,13 @@ pub fn run() {
     match app {
         Ok(app) => app.run(|handle, event| {
             if matches!(event, tauri::RunEvent::Exit) {
-                stop_engine(&handle.state::<AppState>());
+                let state = handle.state::<AppState>();
+                stop_engine(&state);
+                if let Ok(guard) = state.media.lock() {
+                    if let Some(media) = guard.as_ref() {
+                        media.stop();
+                    }
+                };
             }
         }),
         Err(error) => eprintln!("Separator could not start: {error}"),

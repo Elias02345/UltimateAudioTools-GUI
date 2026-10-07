@@ -31,7 +31,7 @@ voice = np.sin(2 * np.pi * (220 * t + 6 * np.sin(2 * np.pi * 3 * t))) * (
 music = 0.1 * np.sin(2 * np.pi * 110 * t) + 0.06 * np.sin(2 * np.pi * 440 * t)
 beat = rng.standard_normal(len(t)).astype(np.float32) * np.exp(-np.mod(t, 0.5) * 40) * 0.04
 mix = np.stack([voice + music + beat, voice * 0.9 + music * 0.7 + beat], axis=1)
-source = data / "Test 🎵 café.wav"
+source = data / f"Test 🎵 café {args.duration}s.wav"
 sf.write(source, mix, rate, subtype="FLOAT")
 
 
@@ -76,7 +76,10 @@ try:
         assert Path(output["path"]).stat().st_size > 100
     if args.device == "cuda":
         assert all(m["device"].startswith("cuda") for m in job["result"]["models"])
-    report = root / ".test-output" / f"{args.preset or args.model}-{args.precision}.json"
+    report_name = (
+        f"{args.preset or args.model}-{args.precision}-{args.device}-{args.duration}s-chunk{args.chunk}.json"
+    )
+    report = root / ".test-output" / report_name
     report.write_text(json.dumps({"capabilities": capabilities, "job": job}, indent=2))
     print("REAL SEPARATION PASSED", report, flush=True)
 finally:

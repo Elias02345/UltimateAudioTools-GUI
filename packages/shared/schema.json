@@ -86,6 +86,10 @@
           "title": "Cuda",
           "type": "boolean"
         },
+        "cuda_installable": {
+          "title": "Cuda Installable",
+          "type": "boolean"
+        },
         "cuda_version": {
           "anyOf": [
             {
@@ -162,6 +166,7 @@
         "ram",
         "gpus",
         "cuda",
+        "cuda_installable",
         "cuda_version",
         "mps",
         "mlx",

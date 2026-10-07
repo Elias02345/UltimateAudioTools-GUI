@@ -1,0 +1,9 @@
+{
+  "release": "20261003",
+  "python": "3.12.15",
+  "targets": {
+    "linux": {"triple":"x86_64-unknown-linux-gnu","sha256":"731af898886c5f821890dc901eca3c651cca8e51fa7308c159d12a1194aeac91","requirements":"linux-cpu.txt"},
+    "windows": {"triple":"x86_64-pc-windows-msvc","sha256":"6fba7f2ae506facf41d457ea8293c7497910a675c69a4e954875169410a50402","requirements":"windows-cpu.txt"},
+    "macos": {"triple":"aarch64-apple-darwin","sha256":"ad8d0c637c0a36b967b310e2c07254f4d2ca8cabaa7699e55ed6290aceb481a2","requirements":"macos-cpu.txt"}
+  }
+}

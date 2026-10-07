@@ -234,7 +234,7 @@ export function AudioWorkspace({
             : {}),
         });
         if (!alive) return;
-        const element = new Audio(mediaUrl(path));
+        const element = new Audio(await mediaUrl(path));
         element.preload = "metadata";
         element.muted = true;
         element.addEventListener("error", () => {

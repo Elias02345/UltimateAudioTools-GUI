@@ -1360,3 +1360,31 @@ dialog p + p {
   animation: none !important;
   transition: none !important;
 }
+
+.runtime-card {
+  padding: 20px;
+  margin: 24px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.runtime-card h3 {
+  margin: 0 0 8px;
+}
+.runtime-card p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.runtime-log {
+  overflow: auto;
+  max-height: 240px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.settings-save {
+  position: sticky;
+  top: -32px;
+  background: var(--surface);
+  padding: 12px 0;
+  z-index: 2;
+}

@@ -39,6 +39,7 @@ import {
   exportPreset,
   importPreset,
   onEngineEvent,
+  restartRuntime,
   reveal,
   time,
   validate,
@@ -67,7 +68,9 @@ type Initial = {
   jobs: Job[];
   presets: Preset[];
   running: boolean;
+  runtime_install: RuntimeStatus;
 };
+type RuntimeStatus = { phase: string; log: string[]; error: string | null };
 type DownloadState = {
   kind: string;
   bytes?: number;
@@ -134,6 +137,11 @@ export function App() {
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   const [storage, setStorage] = useState<Record<string, number> | null>(null);
+  const [runtimeInstall, setRuntimeInstall] = useState<RuntimeStatus>({
+    phase: "idle",
+    log: [],
+    error: null,
+  });
   const [licenses, setLicenses] = useState(false);
   const [listLimit, setListLimit] = useState(100);
   const allowClose = useRef(false);
@@ -197,6 +205,7 @@ export function App() {
       setJobs(data.jobs.map((j) => validate<Job>("Job", j)));
       setPresets(data.presets.map((p) => validate<Preset>("Preset", p)));
       setRunning(data.running);
+      setRuntimeInstall(data.runtime_install);
       setQuality(data.settings.default_quality);
       const [caps] = await Promise.all([
         api<Capabilities>("get_capabilities"),
@@ -240,6 +249,8 @@ export function App() {
         } catch (error) {
           onError(error);
         }
+      } else if (event.event === "runtime_install") {
+        setRuntimeInstall(event.data as RuntimeStatus);
       } else if (event.event === "queue_state")
         setRunning(event.data.running === true);
       else if (event.event === "model_download") {
@@ -478,6 +489,78 @@ export function App() {
       </div>
     );
   if (!settings) return null;
+  const runtimeBusy = [
+    "copying",
+    "downloading",
+    "installing",
+    "testing",
+  ].includes(runtimeInstall.phase);
+  const runtimeCard =
+    capabilities?.cuda_installable || runtimeInstall.phase !== "idle" ? (
+      <div className="runtime-card">
+        <h3>NVIDIA acceleration</h3>
+        <p>
+          Install the private CUDA runtime to process with your NVIDIA GPU. The
+          CPU runtime remains available. Downloads are verified against pinned
+          SHA256 hashes.
+        </p>
+        {runtimeInstall.phase !== "idle" && (
+          <p role="status">Runtime installation: {runtimeInstall.phase}</p>
+        )}
+        {runtimeInstall.error && (
+          <p className="error-note" role="alert">
+            {runtimeInstall.error}
+          </p>
+        )}
+        <div className="actions">
+          {runtimeBusy ? (
+            <button
+              onClick={() =>
+                void perform("cancel-runtime", async () => {
+                  await api("cancel_runtime_install");
+                })
+              }
+            >
+              Cancel installation
+            </button>
+          ) : runtimeInstall.phase === "completed" ? (
+            <button
+              className="primary"
+              onClick={() =>
+                void perform("restart-runtime", async () => {
+                  await restartRuntime();
+                  await initialize();
+                  notify("Engine restarted.");
+                })
+              }
+            >
+              Restart engine with CUDA
+            </button>
+          ) : (
+            <button
+              onClick={() =>
+                setConfirmation({
+                  title: "Install NVIDIA acceleration?",
+                  body: "Download the verified CUDA 13 runtime into Separator’s private data folder. This needs at least 20 GB free disk space during installation and an NVIDIA driver R580 or newer. System Python and drivers stay unchanged.",
+                  action: "Install acceleration",
+                  run: async () => {
+                    await api("install_acceleration");
+                  },
+                })
+              }
+            >
+              Install NVIDIA acceleration
+            </button>
+          )}
+        </div>
+        {runtimeInstall.log.length > 0 && (
+          <details>
+            <summary>Installation log</summary>
+            <pre className="runtime-log">{runtimeInstall.log.join("\n")}</pre>
+          </details>
+        )}
+      </div>
+    ) : null;
   const editedSettings = draftSettings ?? settings;
   const settingsChanged =
     JSON.stringify(editedSettings) !== JSON.stringify(settings);
@@ -608,6 +691,7 @@ export function App() {
                   </small>
                 </div>
               </div>
+              {runtimeCard}
               <p className="muted">
                 Models download when you choose them. Ultra instrumental needs
                 about 1.7 GB of model storage. Your recordings are never
@@ -1769,6 +1853,7 @@ export function App() {
               </section>
               <section className="settings-section">
                 <h2>Storage & runtime</h2>
+                {runtimeCard}
                 <label>
                   Model cache
                   <div className="input-action">
@@ -1955,7 +2040,15 @@ export function App() {
                   <button onClick={() => setLicenses(true)}>
                     Open Source & Model Licenses
                   </button>
-                  <button onClick={() => void initialize()}>
+                  <button
+                    disabled={runtimeBusy || jobs.some(activeJob)}
+                    onClick={() =>
+                      void perform("restart-runtime", async () => {
+                        await restartRuntime();
+                        await initialize();
+                      })
+                    }
+                  >
                     Restart engine connection
                   </button>
                 </div>

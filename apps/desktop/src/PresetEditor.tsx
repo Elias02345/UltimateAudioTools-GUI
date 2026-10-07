@@ -214,6 +214,25 @@ export function InferenceControls({
           Torch compile · experimental
         </label>
       )}
+      <label>
+        Chunk duration (seconds)
+        <input
+          type="number"
+          min="10"
+          max="3600"
+          placeholder="Whole recording"
+          value={value.chunk_duration ?? ""}
+          onChange={(e) =>
+            update(
+              "chunk_duration",
+              e.target.value ? Number(e.target.value) : null,
+            )
+          }
+        />
+        <small>
+          Float processing with surrounding context and crossfaded boundaries.
+        </small>
+      </label>
     </div>
   );
 }

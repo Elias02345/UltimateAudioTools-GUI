@@ -225,6 +225,7 @@ class Capabilities(StrictModel):
     ram: int | None
     gpus: list[GPUInfo]
     cuda: bool
+    cuda_installable: bool
     cuda_version: str | None
     mps: bool
     mlx: bool

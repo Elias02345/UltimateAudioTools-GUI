@@ -41,7 +41,8 @@ class NativeWindow:
     def click(self, text):
         self.js(
             (
-                "const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===arguments[0]); "
+                "const b=[...document.querySelectorAll('button')]"
+                ".find(b=>b.textContent.trim()===arguments[0]); "
                 "if(!b) throw new Error('Missing button '+arguments[0]); b.click();"
             ),
             text,
