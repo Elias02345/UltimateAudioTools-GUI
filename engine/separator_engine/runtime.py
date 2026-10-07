@@ -4,10 +4,10 @@ import json
 import os
 import platform
 import re
-import time
 import shutil
 import subprocess
 import threading
+import time
 import uuid
 from pathlib import Path
 
