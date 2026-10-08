@@ -1,6 +1,7 @@
 """Build an optional image from exactly the private Linux runtime and engine sources."""
 
 import argparse
+import errno
 import os
 import platform
 import shutil
@@ -9,6 +10,18 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def copy_runtime_file(source, destination):
+    try:
+        os.link(source, destination)
+        return destination
+    except OSError as error:
+        if error.errno != errno.EXDEV:
+            raise
+        return shutil.copy2(source, destination)
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--runtime", type=Path, default=ROOT / "apps/desktop/src-tauri/resources/runtime/python")
 parser.add_argument("--command", choices=["docker", "podman"], default="docker")
@@ -38,12 +51,13 @@ with tempfile.TemporaryDirectory(prefix="container-context-", dir=context_root) 
     (context / "codec-scripts").mkdir()
     for name in ["build_ffmpeg.sh", "fetch_ffmpeg_sources.py", "install_ffmpeg.py"]:
         shutil.copyfile(ROOT / "scripts" / name, context / "codec-scripts" / name)
-    # Hard links avoid duplicating gigabytes. Docker receives only the intended source trees.
+    # Link immutable runtime files when possible; installed/extracted runtimes can
+    # live on another filesystem. Docker receives only the intended source trees.
     shutil.copytree(
         args.runtime,
         context / "runtime",
         symlinks=True,
-        copy_function=os.link,
+        copy_function=copy_runtime_file,
         ignore=shutil.ignore_patterns("__pycache__"),
     )
     shutil.copytree(
