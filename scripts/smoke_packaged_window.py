@@ -39,9 +39,7 @@ def process_tree(pid):
                     "command": (proc / "cmdline").read_bytes().replace(b"\0", b" ").decode(),
                 }
             )
-            pending.extend(
-                int(child) for child in (proc / f"task/{current}/children").read_text().split()
-            )
+            pending.extend(int(child) for child in (proc / f"task/{current}/children").read_text().split())
         except OSError:
             processes.append({"pid": current, "exited": True})
     return processes
@@ -122,7 +120,7 @@ def smoke(application: Path, report: Path):
                     "h",
                     (
                         int(300 * math.sin(2 * math.pi * 440 * i / 44100))
-                        for i in range(44100 * 4)
+                        for i in range(44100 * 6)
                         for _ in range(2)
                     ),
                 )
@@ -153,10 +151,54 @@ def smoke(application: Path, report: Path):
                 assert window.js("return window.__mediaProbe.error===null"), window.js(
                     "return String(window.__mediaProbe.error)"
                 )
-                assert window.js("return window.__mediaProbe.audio.duration") == 4
+                assert window.js("return window.__mediaProbe.audio.duration") == 6
                 window.js("window.__mediaProbe.audio.pause(); return true;")
                 window.click("Recommended setup")
                 window.wait_text("Drop your audio here")
+                preset = next(p for p in initial["presets"] if p["id"] == "fast_instrumental")
+                preset["parameters"]["device"] = "cpu"
+                preset["output"]["directory"] = str(profile / "results")
+                job = window.engine(
+                    "enqueue",
+                    requests=[{"path": str(recording), "preset": preset, "download_consent": True}],
+                    start=True,
+                )[0]
+                completed = window.wait(
+                    lambda: next(
+                        (
+                            item
+                            for item in window.engine("list_jobs")
+                            if item["id"] == job["id"] and item["status"] in {"Completed", "Failed"}
+                        ),
+                        None,
+                    ),
+                    seconds=300,
+                )
+                assert completed["status"] == "Completed", completed["error"]
+                assert completed["result"]["device"] == "cpu", completed["result"]
+                session_file = profile / "window-session.json"
+                session_file.write_text(json.dumps({"value": {"sessionId": session}}))
+                project = Path(__file__).resolve().parents[1]
+                python = project / "apps/desktop/src-tauri/resources/runtime/python/bin/python3"
+                export_checks = profile / "export-checks"
+                subprocess.run(
+                    [
+                        str(python),
+                        str(project / "scripts/native_results.py"),
+                        "--session-file",
+                        str(session_file),
+                        "--server",
+                        server,
+                        "--job-id",
+                        job["id"],
+                        "--output",
+                        str(export_checks),
+                    ],
+                    check=True,
+                    timeout=180,
+                    env={**env, "PYTHONNOUSERSITE": "1", "PYTHONPATH": ""},
+                )
+                result_workflow = json.loads((export_checks / "report.json").read_text())
                 window.call("/window/rect", {"width": 900, "height": 640})
                 assert window.js("return document.documentElement.scrollWidth <= window.innerWidth"), (
                     "Minimum window overflows"
@@ -169,12 +211,15 @@ def smoke(application: Path, report: Path):
                             "application": application.name,
                             "capabilities": caps,
                             "readiness": checks,
+                            "result_workflow": result_workflow,
                             "checks": [
                                 "fresh profile",
                                 "production CSP",
                                 "private CPU runtime",
                                 "readiness",
                                 "native preview playback advances",
+                                "real Fast CPU separation",
+                                "native result editing and export",
                                 "minimum window",
                             ],
                         },

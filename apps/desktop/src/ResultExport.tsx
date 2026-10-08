@@ -22,11 +22,13 @@ export function ResultExport({
   jobs,
   edits,
   selectedPath,
+  onPreviewPlay,
   onClose,
 }: {
   jobs: Job[];
   edits?: ResultEdits;
   selectedPath?: string;
+  onPreviewPlay?: () => void;
   onClose: () => void;
 }) {
   const outputs = jobs.flatMap((job) =>
@@ -57,6 +59,11 @@ export function ResultExport({
   );
   const [preparing, setPreparing] = useState(false);
   const previewRequest = useRef(0);
+  const previewAudio = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    const audio = previewAudio.current;
+    return () => audio?.pause();
+  }, [preview?.url]);
   useEffect(
     () => () => {
       previewRequest.current++;
@@ -146,7 +153,9 @@ export function ResultExport({
                 <span>{preview.name}</span>
                 <audio
                   key={preview.url}
+                  ref={previewAudio}
                   controls
+                  onPlay={onPreviewPlay}
                   preload="metadata"
                   src={preview.url}
                   aria-label={`Preview ${preview.name}`}

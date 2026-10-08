@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -106,6 +107,10 @@ def main():
         window.js("return document.querySelector(arguments[0]).value;", f'[aria-label="{stem["stem"]} gain"]')
         == "0.5"
     )
+    window.wait(lambda: window.js('return !document.querySelector("[data-testid=play-result]").disabled;'))
+    window.js("document.querySelector('[aria-label=\"Loop recording\"]').click();")
+    window.js('document.querySelector("[data-testid=play-result]").click();')
+    window.wait(lambda: window.js("return window.__testAudio.some(a=>a.currentSrc&&!a.paused);"))
     window.click("Export stems")
     window.wait_text("Choose the stems to save")
     window.screenshot(root / "export.png")
@@ -126,11 +131,23 @@ def main():
     np.testing.assert_allclose(edited, expected, atol=2e-7)
     window.js("document.querySelector('.exported-files button').click();")
     window.wait(lambda: window.js("return document.querySelector('.export-preview audio')?.readyState>=2;"))
+    assert window.js("return window.__testAudio.some(a=>a.currentSrc&&!a.paused);"), (
+        "Exporting unexpectedly stopped result playback"
+    )
     window.js("document.querySelector('.export-preview audio').play();")
     window.wait(lambda: window.js("return document.querySelector('.export-preview audio').currentTime>0.2;"))
-    window.js("document.querySelector('.export-preview audio').pause();")
+    window.wait(lambda: window.js("return window.__testAudio.every(a=>a.paused);"))
+    window.js(
+        "window.__exportAudio=document.querySelector('.export-preview audio');"
+        "window.__exportAudio.dispatchEvent(new KeyboardEvent('keydown',{code:'Space',bubbles:true}));"
+    )
+    time.sleep(0.3)
+    assert window.js("return window.__testAudio.every(a=>a.paused);"), (
+        "Dialog Space restarted result playback"
+    )
     window.screenshot(root / "success.png")
     window.click("Done")
+    window.wait(lambda: window.js("return window.__exportAudio.paused;"))
     window.click("Export stems")
     window.js("[...document.querySelectorAll('.export-stem input')].slice(1).forEach(e=>e.click());")
     set_input(".export-folder input", root)
@@ -180,6 +197,10 @@ def main():
                     "return preserves library search",
                     "selected edited FLAC sample parity",
                     "exported audio plays within the app",
+                    "export preserves listening until preview starts",
+                    "export preview pauses result playback",
+                    "dialog Space leaves workspace paused",
+                    "closing export stops its preview",
                     "repeat export unique names",
                     "cancel preserves result",
                     "byte-identical original copies",

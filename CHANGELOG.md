@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.4 — Results, editing and export
+## 0.1.5 — Results, editing and export
 
 - Open completed results and their output folders directly from Library, with stem and format details and a local return action.
 - Trim a section and adjust stem levels without modifying source audio; keep edit drafts locally and reset them in one action.
@@ -8,8 +8,8 @@
 - Preserve exact original copies, assign unique names on repeat exports, and support removable drives without hard links.
 - Confirm history removal, validate incomplete range fields, and keep individual edits out of blind comparisons.
 - Preserve the existing separation models, Ultra ensembles, inference defaults and overall design.
-
-- Include the required FFmpeg volume filter and verify sample-accurate WAV/FLAC edits in every packaged runtime. The 0.1.3 candidate was not published.
+- Pause result audio when exported playback starts, keep dialog shortcuts scoped, and stop previews when closed.
+- Include the required FFmpeg volume filter and verify sample-accurate WAV/FLAC edits in every packaged runtime. The 0.1.3 and 0.1.4 candidates were not published.
 
 ## 0.1.2 — Verified first release
 

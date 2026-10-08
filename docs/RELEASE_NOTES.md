@@ -1,4 +1,4 @@
-# Separator 0.1.4
+# Separator 0.1.5
 
 Native audio separation for Windows x64, Linux x64 and Apple Silicon macOS 14+.
 

@@ -8,6 +8,6 @@ Edit drafts are saved in the local app profile for that result. They change play
 
 **Export stems** lets you choose individual stems, a format, optional filename prefix, and a destination folder. A stem's download button selects just that stem. With edits available, **Use current edits** exports the section and levels; uncheck it for the full original stems. FLAC and 24-bit WAV are lossless. MP3, M4A/AAC and OGG/Vorbis expose bitrate choices. Exports preserve the stem's sample rate and channels. **As created** with edits disabled copies files byte-for-byte.
 
-The last successful export folder is remembered. Existing filenames receive a numeric suffix, including on removable drives. Export errors remain in the dialog so you can correct the destination or selection. On success, click a filename to preview the exported audio in the app, or **Open folder** to find the files.
+The last successful export folder is remembered. Existing filenames receive a numeric suffix, including on removable drives. Export errors remain in the dialog so you can correct the destination or selection. On success, click a filename to preview the exported audio in the app, or **Open folder** to find the files. Starting exported playback pauses the result player; closing the dialog stops the preview.
 
 Removing a result or clearing completed history requires confirmation. It removes records from both Library and Queue; source recordings, created stems and exported copies remain on disk.

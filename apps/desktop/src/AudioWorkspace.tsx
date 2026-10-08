@@ -492,9 +492,12 @@ function AudioWorkspacePlayer({
     const shortcut = (e: KeyboardEvent) => {
       if (
         e.code === "Space" &&
+        exportSelection === null &&
         !(
           e.target instanceof HTMLElement &&
-          e.target.closest('input, textarea, select, button, [role="slider"]')
+          e.target.closest(
+            'input, textarea, select, button, audio, [role="slider"], [role="dialog"]',
+          )
         )
       ) {
         e.preventDefault();
@@ -503,7 +506,7 @@ function AudioWorkspacePlayer({
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [toggle]);
+  }, [toggle, exportSelection]);
   const seek = (value: number) => {
     for (const a of audio.current.values())
       if (Number.isFinite(a.duration))
@@ -882,6 +885,10 @@ function AudioWorkspacePlayer({
               : undefined
           }
           onClose={() => setExportSelection(null)}
+          onPreviewPlay={() => {
+            for (const element of audio.current.values()) element.pause();
+            setPlaying(false);
+          }}
         />
       )}
       <div className="player-foot">
