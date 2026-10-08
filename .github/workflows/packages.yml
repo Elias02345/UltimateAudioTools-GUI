@@ -108,7 +108,8 @@ jobs:
           pactl set-default-sink separator_smoke
           export PULSE_SERVER="$(pactl info | sed -n 's/^Server String: //p')"
           test -n "$PULSE_SERVER"
-          xvfb-run -a dbus-run-session -- python scripts/smoke_packaged_window.py --application apps/desktop/src-tauri/target/release/bundle/appimage/Separator_0.1.0_amd64.AppImage
+          app_version="$(python -c 'import json; print(json.load(open("apps/desktop/src-tauri/tauri.conf.json"))["version"])')"
+          xvfb-run -a dbus-run-session -- python scripts/smoke_packaged_window.py --application "apps/desktop/src-tauri/target/release/bundle/appimage/Separator_${app_version}_amd64.AppImage"
       - uses: actions/upload-artifact@v4
         with:
           name: separator-${{ matrix.target }}-${{ github.sha }}

@@ -10,6 +10,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
+from unittest.mock import patch
 
 from .audio import (
     canonical_stems,
@@ -77,6 +78,47 @@ class Engine:
         models = self.models
 
         class AtomicSeparator(Separator):
+            def load_model(self, model_filename, force_reload=False):
+                import onnxruntime as ort
+                import torch
+
+                if self._loaded_model_filename == model_filename and not force_reload:
+                    return super().load_model(model_filename, force_reload=force_reload)
+                self._onnx_device = None
+                create_session = ort.InferenceSession
+                cuda = self.torch_device.type == "cuda"
+                gpu_index = torch.cuda.current_device() if cuda else None
+
+                def verified_session(*args, **options):
+                    if cuda:
+                        options["providers"] = ["CUDAExecutionProvider"]
+                        options["provider_options"] = [{"device_id": str(gpu_index)}]
+                    session = create_session(*args, **options)
+                    providers = session.get_providers()
+                    if cuda:
+                        configured = session.get_provider_options().get("CUDAExecutionProvider", {})
+                        if (
+                            "CUDAExecutionProvider" not in providers
+                            or int(configured.get("device_id", -1)) != gpu_index
+                        ):
+                            raise ValueError(
+                                "ONNX could not activate the selected CUDA GPU. Repair the NVIDIA "
+                                "runtime or explicitly select CPU, then retry."
+                            )
+                    self._onnx_device = (
+                        f"cuda:{gpu_index}"
+                        if cuda
+                        else "coreml"
+                        if "CoreMLExecutionProvider" in providers
+                        else "cpu"
+                    )
+                    return session
+
+                # Model loads are serial inside this isolated worker. Keep the upstream
+                # constructor intact outside this scope, including on failed loads.
+                with patch.object(ort, "InferenceSession", verified_session):
+                    return super().load_model(model_filename, force_reload=force_reload)
+
             def download_file_if_not_exists(self, url, output_path):
                 output = Path(output_path).resolve()
                 if not output.is_relative_to(models.resolve()):
@@ -107,10 +149,16 @@ class Engine:
                     partial = output.with_suffix(output.suffix + ".part")
                     started = time.monotonic()
                     digest = hashlib.sha256()
-                    with requests.get(url, stream=True, timeout=(15, 60)) as response:
+                    with requests.get(
+                        url, stream=True, timeout=(15, 60), headers={"Accept-Encoding": "identity"}
+                    ) as response:
                         if response.status_code != 200:
                             raise RuntimeError(f"Download failed with HTTP {response.status_code}: {url}")
-                        total = int(response.headers.get("content-length", 0)) or source.get("size", 0)
+                        wire_size = int(response.headers.get("content-length", 0))
+                        encoding = response.headers.get("content-encoding", "").strip().lower()
+                        identity_size = wire_size if encoding in {"", "identity"} else 0
+                        publisher_size = source.get("size", 0)
+                        total = publisher_size or identity_size
                         downloaded, last = 0, 0.0
                         try:
                             with partial.open("wb") as stream:
@@ -129,19 +177,21 @@ class Engine:
                                             bytes=downloaded,
                                             total=total or None,
                                             speed=speed,
-                                            eta=(total - downloaded) / speed if total else None,
+                                            eta=max(0, total - downloaded) / speed if total else None,
                                         )
                                         last = now
                                 stream.flush()
                                 os.fsync(stream.fileno())
-                            if total and downloaded != total:
+                            if (identity_size and downloaded != identity_size) or (
+                                publisher_size and downloaded != publisher_size
+                            ):
                                 raise ValueError("The model download was incomplete. Retry the download.")
                             if source.get("sha256") and digest.hexdigest() != source["sha256"]:
                                 raise ValueError("The downloaded model failed its publisher SHA256 check.")
                             if downloaded == 0:
                                 raise ValueError("The downloaded file is empty.")
                             if output.suffix == ".json":
-                                json.loads(partial.read_text())
+                                json.loads(partial.read_text(encoding="utf-8"))
                             os.replace(partial, output)
                             emit(
                                 "download_progress",
@@ -160,7 +210,7 @@ class Engine:
         import torch
 
         settings = request.preset.parameters
-        if settings.device == "cuda":
+        if settings.device == "cuda" or (settings.device == "auto" and torch.cuda.is_available()):
             if not torch.cuda.is_available() or settings.gpu_index >= torch.cuda.device_count():
                 raise ValueError("The selected CUDA device is not available. Rescan hardware or choose CPU.")
             torch.cuda.set_device(settings.gpu_index)
@@ -276,7 +326,10 @@ class Engine:
             separator.load_model(model)
             # Preserve floating-point model levels; apply one ceiling after ensembling.
             separator.model_instance.normalization_threshold = float("inf")
-            actual_device = str(getattr(separator.model_instance, "torch_device", separator.torch_device))
+            actual_device = str(
+                getattr(separator, "_onnx_device", None)
+                or getattr(separator.model_instance, "torch_device", separator.torch_device)
+            )
             emit(
                 "stage",
                 stage="Processing",

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument("--runtime", type=Path, default=ROOT / "apps/desktop/src-tauri/resources/runtime/python")
 parser.add_argument("--command", choices=["docker", "podman"], default="docker")
-parser.add_argument("--image", default="separator-engine:0.1.0")
+parser.add_argument("--image", default="separator-engine:0.1.1")
 parser.add_argument("--backend", choices=["cpu", "cuda"], default="cpu")
 parser.add_argument("--network", choices=["default", "host"], default="default")
 args = parser.parse_args()

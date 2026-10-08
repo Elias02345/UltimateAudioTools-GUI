@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 — Verified first release
+
+- Fix compressed model metadata downloads while preserving publisher size, checksum and truncated-transfer checks.
+- Honor the selected GPU for MDX/ONNX inference and reject silent CUDA-to-CPU provider fallback.
+- Keep the first release gated on all installer and code checks; the superseded 0.1.0 tag was not published.
+
 ## 0.1.0 — Initial desktop studio
 
 - Native Tauri interface with first-run readiness checks, drag/drop batch import, persistent queue and local result library.

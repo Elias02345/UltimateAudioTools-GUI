@@ -1,6 +1,6 @@
 [project]
 name = "separator-engine"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local structured engine for Separator desktop"
 requires-python = ">=3.12,<3.13"
 dependencies = ["audio-separator==0.47.0", "pydantic>=2.10,<3", "platformdirs>=4,<5", "imageio-ffmpeg==0.6.0", "soundfile>=0.13,<1", "filelock>=4,<5", "audioread==3.0.1", "psutil>=7,<8"]
