@@ -1,7 +1,9 @@
 """Launch the real Linux installer in a fresh profile and verify production UI/readiness."""
 
 import argparse
+import array
 import json
+import math
 import os
 import shutil
 import socket
@@ -9,6 +11,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+import wave
 from pathlib import Path
 
 from native_ui import NativeWindow
@@ -30,6 +33,7 @@ def smoke(application: Path, report: Path):
         native_port = port()
     server = f"http://127.0.0.1:{server_port}"
     session = None
+    window = None
     with tempfile.TemporaryDirectory(prefix="Separator fresh package café ") as temp:
         profile = Path(temp)
         env = {**os.environ, "APPIMAGE_EXTRACT_AND_RUN": "1"}
@@ -88,6 +92,44 @@ def smoke(application: Path, report: Path):
                     "Baseline private CPU runtime was not used"
                 )
                 assert "9.0.2" in caps["ffmpeg"]
+                recording = profile / "Playback café 音楽.wav"
+                samples = array.array(
+                    "h",
+                    (
+                        int(300 * math.sin(2 * math.pi * 440 * i / 44100))
+                        for i in range(44100 * 4)
+                        for _ in range(2)
+                    ),
+                )
+                with wave.open(str(recording), "wb") as audio:
+                    audio.setnchannels(2)
+                    audio.setsampwidth(2)
+                    audio.setframerate(44100)
+                    audio.writeframes(samples.tobytes())
+                preview = window.engine("preview", path=str(recording))
+                media = window.invoke("audio_url", {"path": preview})
+                assert "ok" in media, media
+                window.js(
+                    "window.__mediaProbe={error:null,audio:new Audio(arguments[0])};"
+                    "window.__mediaProbe.audio.volume=0.05;"
+                    "window.__mediaProbe.audio.addEventListener('error',"
+                    "()=>window.__mediaProbe.error='Native audio failed');"
+                    "window.__mediaProbe.audio.play().catch(e=>window.__mediaProbe.error=String(e));"
+                    " return true;",
+                    media["ok"],
+                )
+                window.wait(
+                    lambda: window.js(
+                        "return window.__mediaProbe.audio.currentTime>0.2 "
+                        "|| window.__mediaProbe.error!==null;"
+                    ),
+                    seconds=20,
+                )
+                assert window.js("return window.__mediaProbe.error===null"), window.js(
+                    "return String(window.__mediaProbe.error)"
+                )
+                assert window.js("return window.__mediaProbe.audio.duration") == 4
+                window.js("window.__mediaProbe.audio.pause(); return true;")
                 window.click("Recommended setup")
                 window.wait_text("Drop your audio here")
                 window.call("/window/rect", {"width": 900, "height": 640})
@@ -107,6 +149,7 @@ def smoke(application: Path, report: Path):
                                 "production CSP",
                                 "private CPU runtime",
                                 "readiness",
+                                "native preview playback advances",
                                 "minimum window",
                             ],
                         },
@@ -120,6 +163,15 @@ def smoke(application: Path, report: Path):
                 print(log.read()[-6000:], flush=True)
                 raise
             finally:
+                if window:
+                    try:
+                        window.js(
+                            "window.__TAURI_INTERNALS__.invoke('plugin:window|close',{label:'main'})"
+                            ".catch(()=>{}); return true;"
+                        )
+                        time.sleep(0.3)
+                    except RuntimeError:
+                        pass
                 if session:
                     try:
                         urllib.request.urlopen(

@@ -1,6 +1,6 @@
 # Build and validate
 
-Use Node 24, Rust stable (1.90+), Python 3.12 and uv 0.12.23. Linux needs GTK 3, WebKitGTK 4.1, librsvg, patchelf and GStreamer base/good/bad/libav packages. Windows needs the MSVC build tools and WebView2; macOS builds target Apple Silicon 14+.
+Use Node 24, Rust stable (1.90+), Python 3.12 and uv 0.12.23. Linux needs GTK 3, WebKitGTK 4.1, librsvg, patchelf and GStreamer base/good/bad/libav/pulseaudio packages. AppImage builds must include the complete Good plugin set, including the autodetect audio sink and PulseAudio backend. Windows needs the MSVC build tools and WebView2; macOS builds target Apple Silicon 14+.
 
 ```sh
 npm ci
@@ -56,3 +56,7 @@ PYTHONPATH=engine .venv/bin/python scripts/smoke_runtime_upgrade.py
 These checks intentionally download real weights or CUDA wheels and write only application/test-owned outputs. They assert actual device selection, finite samples, channel count, duration and real files. A synthetic fixture is a reproducible execution check, not a music-quality benchmark.
 
 Native UI testing uses `tauri-driver` and WebKitWebDriver on Linux, or the supported Windows WebDriver. `scripts/native_ui.py` contains the actual-window harness. Start Vite, build the debug application, and create a tauri-driver session with its executable; save the returned session JSON to `.test-output/webdriver-session.json`. Run `npm run test:e2e` for preset persistence, cancellation/retry and real result playback; run the development Python with `scripts/native_comparison.py` for an actual ranged custom-ensemble comparison and safe cleanup. These tests require cached models, a real audio output backend and available CUDA or CPU; they execute inference. Linux AppImages bundle the media framework. [Verified results](docs/STATUS.md).
+
+After building an AppImage, run `python scripts/smoke_packaged_window.py --application apps/desktop/src-tauri/target/release/bundle/appimage/Separator_0.1.0_amd64.AppImage`. This launches a fresh native production window, tests its private runtime and CSP, plays a real preview through the packaged media framework, and checks the minimum window size. CI uses an isolated virtual PulseAudio sink; no model downloads are needed for this smoke test. `scripts/install_linux_ci_dependencies.sh` is restricted to disposable CI runners and retries transient package-mirror failures.
+
+Tagged releases verify every updater artifact's signature and signed version before publication. The update feed has separate Debian and AppImage targets, and only the explicitly named installers, update archives, signature sidecars and corresponding FFmpeg sources are published.

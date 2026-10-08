@@ -9,5 +9,6 @@
 - Native playback with streamed previews, waveform seek, mute/solo, loop and blind range comparisons.
 - Surviving stems remain playable when source audio has moved; individual model selection clears ensemble weights and keeps the selected target consistent.
 - Reproducible multi-platform packaging and source/runtime validation in GitHub Actions.
-- Precompiled IPC validators preserve production CSP; Linux packages also launch a real native window in CI.
+- Precompiled IPC validators preserve production CSP; Linux packages also launch a real native window and play an audio preview in CI.
+- Debian and AppImage updates each receive a verified, version-bound signature and the matching installer in the release feed.
 - Isolated optional container processing, explicit comparison cleanup, and source-built FFmpeg with complete corresponding codec sources and bundled license notices.

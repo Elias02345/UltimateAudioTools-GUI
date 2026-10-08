@@ -14,13 +14,43 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def release_assets(source: Path, version: str) -> dict[str, Path]:
+    number = version.removeprefix("v")
+    installers = {
+        "appimage": {f"Separator_{number}_amd64.AppImage"},
+        "deb": {f"Separator_{number}_amd64.deb"},
+        "nsis": {f"Separator_{number}_x64-setup.exe"},
+        "dmg": {f"Separator_{number}_aarch64.dmg"},
+        "macos": {"Separator.app.tar.gz", f"Separator_{number}_aarch64.app.tar.gz"},
+    }
+    sources = {f"FFmpeg-corresponding-source-{target}.tar.gz" for target in ["linux", "windows", "macos"]}
+    selected = {}
+    for path in source.rglob("*"):
+        if not path.is_file():
+            continue
+        base = path.name.removesuffix(".sig")
+        if path.name not in sources and base not in installers.get(path.parent.name, set()):
+            continue
+        if path.name in selected:
+            raise ValueError(f"Duplicate release asset name: {path.name}")
+        selected[path.name] = path
+    for folder, names in installers.items():
+        if sum(name in selected for name in names) != 1:
+            raise ValueError(f"Expected exactly one {folder} installer/update artifact")
+    if not sources.issubset(selected):
+        raise ValueError("Every platform must supply its exact corresponding FFmpeg sources")
+    return selected
+
+
 def prepare(source: Path, output: Path, version: str, verifier: Path):
     config = json.loads((ROOT / "apps/desktop/src-tauri/tauri.conf.json").read_text())
     if version.removeprefix("v") != config["version"]:
         raise ValueError("Release tag must match the application version")
+    candidates = release_assets(source, version)
     output.mkdir(parents=True, exist_ok=False)
     signatures = {
-        "linux-x86_64": ".AppImage.sig",
+        "linux-x86_64-appimage": ".AppImage.sig",
+        "linux-x86_64-deb": ".deb.sig",
         "windows-x86_64": ".exe.sig",
         "darwin-aarch64": ".app.tar.gz.sig",
     }
@@ -29,7 +59,7 @@ def prepare(source: Path, output: Path, version: str, verifier: Path):
         key = Path(temp) / "public.key"
         key.write_bytes(base64.b64decode(config["plugins"]["updater"]["pubkey"], validate=True))
         for platform, extension in signatures.items():
-            matches = list(source.rglob("*" + extension))
+            matches = [path for name, path in candidates.items() if name.endswith(extension)]
             if len(matches) != 1:
                 raise ValueError(f"Expected exactly one signed update for {platform}, found {len(matches)}")
             signature = matches[0]
@@ -49,21 +79,14 @@ def prepare(source: Path, output: Path, version: str, verifier: Path):
                 "url": f"https://github.com/Elias02345/UltimateAudioTools-GUI/releases/download/{version}/"
                 + quote(artifact.name),
             }
-    candidates = [
-        path
-        for path in source.rglob("*")
-        if path.is_file()
-        and any(path.name.endswith(ext) for ext in [".AppImage", ".deb", ".exe", ".dmg", ".sig", ".tar.gz"])
-    ]
-    for path in candidates:
+    platforms["linux-x86_64"] = platforms["linux-x86_64-appimage"]
+    for path in candidates.values():
         destination = output / path.name
         if destination.exists():
             raise ValueError(f"Duplicate release asset name: {path.name}")
         if path.stat().st_size >= 2 * 1024**3:
             raise ValueError(f"Release asset exceeds GitHub's limit: {path.name}")
         shutil.copy2(path, destination)
-    for target in ["linux", "windows", "macos"]:
-        assert (output / f"FFmpeg-corresponding-source-{target}.tar.gz").is_file()
     manifest = {
         "version": config["version"],
         "notes": "See the release notes for changes and platform verification.",

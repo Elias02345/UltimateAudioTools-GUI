@@ -22,6 +22,8 @@ Windows/Linux NVIDIA users can install a hash-verified private CUDA runtime from
 
 Intel macOS, AMD DirectML and MLX are not advertised as verified providers. The current Apple target uses the supported PyTorch MPS path; see [platform evidence](docs/STATUS.md).
 
+Linux packages are built on Ubuntu 22.04; older distributions are not verified. Windows installation downloads WebView2 if it is absent, so that first installation needs internet. This release has signed application updates but no Windows Authenticode or Apple Developer ID/notarization certificate. For a trusted macOS download, use System Settings → Privacy & Security → Open Anyway after the first launch attempt; keep system security enabled. [Apple's first-open guidance](https://support.apple.com/en-gb/102445).
+
 ## In the studio
 
 - Import multiple files or folders; WAV, FLAC, MP3, M4A, OGG and other FFmpeg formats.

@@ -81,11 +81,21 @@ def build(target: str):
     env["PYTHONPATH"] = str(ROOT / "engine")
     env["PYTHONNOUSERSITE"] = "1"
     env["PIP_CONFIG_FILE"] = os.devnull
-    probe = (
-        "from separator_engine.server import Supervisor; from tempfile import TemporaryDirectory; "
-        "from pathlib import Path; t=TemporaryDirectory(); s=Supervisor(Path(t.name),lambda *a,**kw:None); "
-        "checks=s.self_test(); print(checks); assert all(c['passed'] for c in checks); s.close()"
-    )
+    probe = """
+from separator_engine.server import Supervisor
+from tempfile import TemporaryDirectory
+from pathlib import Path
+with TemporaryDirectory() as temp:
+    supervisor = Supervisor(Path(temp), lambda *a, **kw: None)
+    try:
+        checks = supervisor.self_test()
+        print(checks)
+        assert all(check['passed'] for check in checks)
+    finally:
+        supervisor.close()
+        supervisor.pool.shutdown(wait=True, cancel_futures=True)
+        supervisor.state.close()
+"""
     subprocess.run([str(python), "-c", probe], check=True, env=env)
     subprocess.run(
         [str(python), "-I", str(ROOT / "engine/separator_engine/runtime_probe.py")], check=True, env=env
