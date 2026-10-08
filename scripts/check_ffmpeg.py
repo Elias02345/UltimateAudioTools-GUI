@@ -75,15 +75,50 @@ with tempfile.TemporaryDirectory(prefix="Separator codec 音楽 café ") as dire
         if extension in {"flac", "wav"}:
             np.testing.assert_allclose(audio, samples, atol=2e-7)
         checks.append(extension)
+    baseline, _ = sf.read(source, always_2d=True)
+    edit_checks = []
+    for extension, codec in [("wav", "pcm_s24le"), ("flac", "flac")]:
+        edited = root / ("edited 音楽." + extension)
+        subprocess.run(
+            [
+                executable,
+                "-nostdin",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(source),
+                "-ss",
+                "0.5",
+                "-t",
+                "0.75",
+                "-af",
+                "volume=0.4",
+                "-ar",
+                str(rate),
+                "-c:a",
+                codec,
+                str(edited),
+            ],
+            check=True,
+            timeout=30,
+        )
+        audio, sr = sf.read(edited, always_2d=True)
+        assert sr == rate and audio.shape == (33075, 2) and np.isfinite(audio).all()
+        np.testing.assert_allclose(audio, baseline[22050:55125] * 0.4, rtol=0, atol=2e-7)
+        edit_checks.append(extension)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(
             json.dumps(
                 {
                     "codecs": checks,
+                    "trim_gain_exports": edit_checks,
                     "version": subprocess.check_output([executable, "-version"], text=True).splitlines()[0],
                 },
                 indent=2,
             )
         )
     print("REAL CODEC TESTS PASSED", checks, flush=True)
+    print("RESULT EDIT FILTERS PASSED", edit_checks, flush=True)

@@ -21,5 +21,5 @@ RUN /opt/python/bin/python3 -I /opt/engine/separator_engine/runtime_probe.py \
     && /opt/python/separator-bin/ffmpeg -hide_banner -version
 USER 0:0
 ARG BACKEND=cpu
-LABEL org.separator.protocol="1" org.separator.version="0.1.3" org.separator.backend="${BACKEND}"
+LABEL org.separator.protocol="1" org.separator.version="0.1.4" org.separator.backend="${BACKEND}"
 CMD ["python", "-u", "-m", "separator_engine.worker", "serve", "/models", "/state"]

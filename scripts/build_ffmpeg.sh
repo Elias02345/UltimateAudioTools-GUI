@@ -43,7 +43,7 @@ args=("--prefix=${FF_PREFIX}" --disable-shared --enable-static --disable-doc --d
   --disable-autodetect --disable-gpl --disable-version3 --disable-nonfree
   --disable-network --disable-x86asm --disable-ffplay --disable-ffprobe
   --disable-indevs --disable-outdevs --disable-avdevice --disable-filters
-  --enable-filter=aresample,aformat,anull,atrim,asetpts,abuffer,abuffersink
+  --enable-filter=aresample,aformat,anull,atrim,asetpts,abuffer,abuffersink,volume
   --enable-libmp3lame --enable-libvorbis --pkg-config-flags=--static
   "--extra-cflags=-I${FF_PREFIX}/include" "--extra-ldflags=-L${FF_PREFIX}/lib")
 case "${FF_PLATFORM}" in MINGW*|MSYS*) args+=(--target-os=mingw32 --arch=x86_64 --cc=gcc --cxx=g++ "--extra-ldflags=-L${FF_PREFIX}/lib -static -static-libgcc");; esac

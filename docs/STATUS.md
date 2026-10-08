@@ -26,6 +26,10 @@ Intel macOS lacks current compatible upstream Torch wheels. DirectML conflicts w
 
 The native WebDriver harness invokes IPC once and polls a stored Promise through synchronous script reads. Three fresh production-window repetitions passed after a CI async transport reset; failed tests preserve driver/process, desktop-log and window diagnostics. Release publication still requires all package and validation jobs.
 
-## Result workflow (0.1.3)
+## Result workflow (0.1.4)
 
 Real native-window tests passed single- and multi-stem selected exports, sample-accurate FLAC trim/gain parity, exported-file playback, exact original copies, repeated unique names, incomplete range validation, edit persistence and return-to-search. Actual CUDA Ultra/Fast comparison playback confirmed that individual saved levels do not leak into blind comparisons. Light/dark and 900 × 640 views passed without horizontal overflow. Fifteen export tests cover real codecs, source preservation, unsupported-hard-link fallback and partial-file cleanup.
+
+The 0.1.3 publication was canceled when testing the shipped FFmpeg revealed a missing volume filter. The build now includes it, and every installer audit checks actual sample-accurate WAV/FLAC trim and gain using that package's private executable.
+
+Additional fresh local CUDA installation validation is blocked by a host NVIDIA 615.71.09 display-driver hang. The passing native workflow and CUDA comparison reports predate this hang. The isolated unfinished installation has not activated a runtime; the existing 0.1.2 profile remains intact. A user-managed system restart is needed before further local GPU validation. No drivers or system services were modified.
