@@ -6,10 +6,12 @@ export function Dialog({
   title,
   children,
   onClose,
+  busy = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  busy?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -30,7 +32,7 @@ export function Dialog({
     >
       <div className="dialog-head">
         <h2>{title}</h2>
-        <button aria-label="Close dialog" onClick={onClose}>
+        <button aria-label="Close dialog" disabled={busy} onClick={onClose}>
           <X size={18} />
         </button>
       </div>

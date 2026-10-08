@@ -120,7 +120,7 @@ window.js(
     "window.Audio=function(...a){const el=new OriginalAudio(...a);window.__testAudio.push(el);return el};"
     "window.Audio.prototype=OriginalAudio.prototype;"
 )
-window.click_row("data-job-id", job["id"], "Listen")
+window.click_row("data-job-id", job["id"], "Open result")
 window.wait(
     lambda: window.js("return window.__testAudio.length>=2 && window.__testAudio.every(a=>a.readyState>=2);")
 )

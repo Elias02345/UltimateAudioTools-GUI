@@ -12,7 +12,7 @@ import type {
 } from "../../../packages/shared/types";
 
 export type { AudioMetadata, Capabilities, Job, ModelInfo, Preset, Settings };
-export const BRAND = { name: "Separator", version: "0.1.2" };
+export const BRAND = { name: "Separator", version: "0.1.3" };
 export function validate<T>(name: string, value: unknown): T {
   const check = (validators as Record<string, ValidateFunction>)[name];
   if (!check || !check(value))
@@ -71,3 +71,7 @@ export const bytes = (n: number | null | undefined) =>
     : n >= 1024 ** 3
       ? `${(n / 1024 ** 3).toFixed(1)} GB`
       : `${(n / 1024 ** 2).toFixed(0)} MB`;
+export const preciseTime = (s: number) => {
+  const ms = Math.round(s * 1000);
+  return `${time(Math.floor(ms / 1000))}.${(ms % 1000).toString().padStart(3, "0")}`;
+};

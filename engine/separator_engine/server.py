@@ -580,6 +580,14 @@ class Supervisor:
             return added
         if method == "list_jobs":
             return [Job.model_validate(j).model_dump() for j in self.jobs]
+        if method == "export_results":
+            from .result_export import ResultExport, export_results
+
+            request = ResultExport.model_validate(params)
+            with self.cache_lock:
+                with self.lock:
+                    jobs = [Job.model_validate(j).model_dump() for j in self.jobs]
+                return export_results(request, jobs)
         if method == "process_queue":
             self.running, self.single = True, params.get("single", False)
             self.wake.set()

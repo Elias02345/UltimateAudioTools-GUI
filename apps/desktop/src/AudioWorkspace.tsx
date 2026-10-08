@@ -7,9 +7,40 @@ import {
   FolderOpen,
   Download,
   Repeat2,
+  ArrowLeft,
+  RotateCcw,
+  Scissors,
 } from "lucide-react";
-import { api, mediaUrl, time, reveal, exportAudio } from "./api";
+import { api, mediaUrl, time, preciseTime, reveal } from "./api";
 import type { Job } from "./api";
+import { ResultExport } from "./ResultExport";
+
+type EditDraft = { start: number; end: number; gains: Record<string, number> };
+function readDraft(job: Job): EditDraft {
+  const end = job.result?.outputs[0]?.duration ?? job.source.duration;
+  try {
+    const value = JSON.parse(
+      localStorage.getItem(`separator-edits-${job.id}`) ?? "null",
+    );
+    if (
+      value &&
+      Number.isFinite(value.start) &&
+      Number.isFinite(value.end) &&
+      value.start >= 0 &&
+      value.start < value.end &&
+      value.end <= end &&
+      typeof value.gains === "object" &&
+      value.gains !== null &&
+      Object.values(value.gains).every(
+        (g) => typeof g === "number" && Number.isFinite(g) && g >= 0 && g <= 1,
+      )
+    )
+      return value;
+  } catch {
+    /* Ignore invalid local drafts; the audio files are unaffected. */
+  }
+  return { start: 0, end, gains: {} };
+}
 
 type Track = { id: string; name: string; path: string; color: string };
 type Peaks = { peaks: number[]; duration: number };
@@ -33,6 +64,8 @@ export function Waveform({
   onSeek,
   color = "var(--primary)",
   zoom = 1,
+  range,
+  label = "Seek audio",
 }: {
   path: string;
   position: number;
@@ -40,6 +73,8 @@ export function Waveform({
   onSeek: (value: number) => void;
   color?: string;
   zoom?: number;
+  range?: [number, number];
+  label?: string;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [peaks, setPeaks] = useState<Peaks | null>(null);
@@ -88,6 +123,22 @@ export function Waveform({
           ),
         ),
       );
+      if (range) {
+        const left = Math.max(
+          0,
+          (((range[0] / duration) * peaks.peaks.length - start) /
+            visibleCount) *
+            width,
+        );
+        const right = Math.min(
+          width,
+          (((range[1] / duration) * peaks.peaks.length - start) /
+            visibleCount) *
+            width,
+        );
+        context.globalAlpha = 0.12;
+        if (right > left) context.fillRect(left, 0, right - left, height);
+      }
       for (let i = 0; i < bars; i++) {
         const from = start + Math.floor((i * visibleCount) / bars),
           to = start + Math.floor(((i + 1) * visibleCount) / bars);
@@ -110,7 +161,7 @@ export function Waveform({
     const observer = new ResizeObserver(draw);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [peaks, position, duration, color, zoom]);
+  }, [peaks, position, duration, color, zoom, range]);
   const seek = (fraction: number) => {
     if (!peaks) return;
     const count = peaks.peaks.length / zoom;
@@ -136,7 +187,7 @@ export function Waveform({
       className="waveform"
       role="slider"
       tabIndex={0}
-      aria-label="Seek audio"
+      aria-label={label}
       aria-valuemin={0}
       aria-valuemax={duration}
       aria-valuenow={position}
@@ -189,12 +240,16 @@ function AudioWorkspacePlayer({
   onReveal,
   onError,
   onAgain,
+  onBack,
+  backLabel,
 }: {
   jobs: Job[];
   blind?: boolean;
   onReveal?: () => void;
   onError: (e: unknown) => void;
   onAgain?: (job: Job) => void;
+  onBack?: () => void;
+  backLabel?: string;
 }) {
   const job = jobs[0];
   const tracks: Track[] = [
@@ -232,7 +287,38 @@ function AudioWorkspacePlayer({
   const [zoom, setZoom] = useState(1);
   const [loop, setLoop] = useState(false);
   const [muted, setMuted] = useState<Set<string>>(new Set());
-  const [gains, setGains] = useState<Record<string, number>>({});
+  const [draft, setDraft] = useState(() =>
+    jobs.length === 1
+      ? readDraft(job)
+      : ({
+          start: 0,
+          end: job.result?.outputs[0]?.duration ?? job.source.duration,
+          gains: {},
+        } as EditDraft),
+  );
+  const gains = draft.gains;
+  const [editing, setEditing] = useState(false);
+  const [exportSelection, setExportSelection] = useState<string | null>(null);
+  const [rangeError, setRangeError] = useState<string | null>(null);
+  const [rangeText, setRangeText] = useState(() => ({
+    start: String(draft.start),
+    end: String(draft.end),
+  }));
+  const single = jobs.length === 1;
+  const edited =
+    single &&
+    (draft.start > 0 ||
+      draft.end <
+        (job.result?.outputs[0]?.duration ?? job.source.duration) - 0.001 ||
+      tracks.some(
+        (track) => track.id !== "original" && (gains[track.id] ?? 1) !== 1,
+      ));
+  const validRange =
+    draft.start >= 0 && draft.end <= duration + 0.05 && draft.end > draft.start;
+  useEffect(() => {
+    if (single && validRange)
+      localStorage.setItem(`separator-edits-${job.id}`, JSON.stringify(draft));
+  }, [draft, job.id, single, validRange]);
   const [mix, setMix] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
@@ -347,6 +433,19 @@ function AudioWorkspacePlayer({
     const tick = () => {
       const master = masterAudio(audio.current);
       if (master) {
+        if (
+          single &&
+          validRange &&
+          !master.paused &&
+          (master.currentTime >= draft.end || master.currentTime < draft.start)
+        ) {
+          const finished = master.currentTime >= draft.end;
+          for (const a of audio.current.values()) {
+            a.currentTime = draft.start;
+            if (!loop && finished) a.pause();
+          }
+          if (!loop && finished) setPlaying(false);
+        }
         setPosition(master.currentTime);
         if (!master.paused && !master.seeking) {
           for (const [id, a] of audio.current) {
@@ -363,7 +462,7 @@ function AudioWorkspacePlayer({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [ready]);
+  }, [ready, single, validRange, draft.start, draft.end, loop]);
   const toggle = useCallback(async () => {
     const master = masterAudio(audio.current);
     if (!master) return;
@@ -372,6 +471,14 @@ function AudioWorkspacePlayer({
         for (const a of audio.current.values()) a.pause();
         setPlaying(false);
       } else {
+        if (
+          single &&
+          validRange &&
+          (master.currentTime < draft.start ||
+            master.currentTime >= draft.end - 0.01)
+        ) {
+          for (const a of audio.current.values()) a.currentTime = draft.start;
+        }
         await Promise.all([...audio.current.values()].map((a) => a.play()));
         setPlaying(true);
       }
@@ -380,7 +487,7 @@ function AudioWorkspacePlayer({
       setPlaying(false);
       onError(e);
     }
-  }, [onError]);
+  }, [onError, single, validRange, draft.start, draft.end]);
   useEffect(() => {
     const shortcut = (e: KeyboardEvent) => {
       if (
@@ -404,8 +511,37 @@ function AudioWorkspacePlayer({
     setPosition(value);
   };
   const current = tracks.find((t) => t.id === selected) ?? tracks[0];
+  const updateRange = (start: number, end: number) => {
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      start < 0 ||
+      end > duration + 0.05 ||
+      start >= end
+    ) {
+      setRangeError("Choose a start before the end, within the recording.");
+      return;
+    }
+    setRangeError(null);
+    setDraft((previous) => ({ ...previous, start, end }));
+    seek(start);
+  };
+  const changeRange = (next: typeof rangeText) => {
+    setRangeText(next);
+    if (!next.start.trim() || !next.end.trim()) {
+      setRangeError("Enter both start and end times.");
+      return;
+    }
+    updateRange(Number(next.start), Number(next.end));
+  };
   return (
     <section className="audio-workspace">
+      {onBack && (
+        <button className="text-button result-back" onClick={onBack}>
+          <ArrowLeft size={15} />
+          {backLabel ?? "Back to Library"}
+        </button>
+      )}
       <div className="section-title">
         <div>
           <span className="badge success">
@@ -417,18 +553,27 @@ function AudioWorkspacePlayer({
               ? "Listen first. Reveal the models when you are ready."
               : `${job.request.preset.name} · ${job.result?.device} · Lossless processing`}
           </p>
+          {!blind && (
+            <p className="result-summary">
+              {job.result?.outputs.map((o) => o.stem).join(" + ")} ·{" "}
+              {time(duration)} ·{" "}
+              {(
+                (job.result?.outputs[0]?.sample_rate ??
+                  job.source.sample_rate) / 1000
+              ).toFixed(1)}{" "}
+              kHz
+            </p>
+          )}
         </div>
         <div className="actions">
           {blind && <button onClick={onReveal}>Reveal models</button>}
           <button
-            onClick={() =>
-              void exportAudio(
-                jobs.flatMap((j) => j.result?.outputs.map((o) => o.path) ?? []),
-              ).catch(onError)
-            }
+            className="primary"
+            disabled={Boolean(rangeError)}
+            onClick={() => setExportSelection("")}
           >
             <Download size={15} />
-            Export
+            Export stems
           </button>
           <button
             aria-label="Open output folder"
@@ -438,6 +583,7 @@ function AudioWorkspacePlayer({
             }}
           >
             <FolderOpen size={17} />
+            Folder
           </button>
         </div>
       </div>
@@ -445,6 +591,120 @@ function AudioWorkspacePlayer({
         <p className="error-inline" role="alert">
           {loadError}
         </p>
+      )}
+      {single && (
+        <>
+          <div
+            className="result-mode"
+            role="group"
+            aria-label="Result workspace mode"
+          >
+            <button
+              aria-pressed={!editing}
+              className={!editing ? "active" : ""}
+              onClick={() => setEditing(false)}
+            >
+              Listen
+            </button>
+            <button
+              aria-pressed={editing}
+              className={editing ? "active" : ""}
+              onClick={() => setEditing(true)}
+            >
+              <Scissors size={15} />
+              Edit audio
+            </button>
+            <span>
+              {edited
+                ? "Edits saved locally · export to create files"
+                : "Your created stems are preserved"}
+            </span>
+          </div>
+          {editing && (
+            <div className="result-editor">
+              <div className="edit-heading">
+                <strong>Keep a section</strong>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setDraft({ start: 0, end: duration, gains: {} });
+                    setRangeText({ start: "0", end: String(duration) });
+                    setRangeError(null);
+                    setMuted(new Set());
+                    seek(0);
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  Reset edits
+                </button>
+              </div>
+              <div className="trim-controls">
+                <label>
+                  Start (seconds)
+                  <input
+                    aria-label="Trim start"
+                    type="number"
+                    min={0}
+                    max={draft.end}
+                    step="0.1"
+                    value={rangeText.start}
+                    onChange={(e) => {
+                      const start = e.target.value;
+                      changeRange({ ...rangeText, start });
+                    }}
+                  />
+                </label>
+                <button
+                  disabled={!ready || position >= draft.end}
+                  onClick={() => {
+                    changeRange({
+                      ...rangeText,
+                      start: position.toFixed(3),
+                    });
+                  }}
+                >
+                  Set start here
+                </button>
+                <label>
+                  End (seconds)
+                  <input
+                    aria-label="Trim end"
+                    type="number"
+                    min={draft.start}
+                    max={duration}
+                    step="0.1"
+                    value={rangeText.end}
+                    onChange={(e) => {
+                      const end = e.target.value;
+                      changeRange({ ...rangeText, end });
+                    }}
+                  />
+                </label>
+                <button
+                  disabled={!ready || position <= draft.start}
+                  onClick={() => {
+                    changeRange({
+                      ...rangeText,
+                      end: position.toFixed(3),
+                    });
+                  }}
+                >
+                  Set end here
+                </button>
+              </div>
+              <p>
+                {preciseTime(draft.end - draft.start)} selected · Set stem
+                levels below. Mute, solo and master volume are for listening
+                only.
+              </p>
+              {rangeError && (
+                <p role="alert" className="error-inline">
+                  {rangeError}
+                </p>
+              )}
+            </div>
+          )}
+        </>
       )}
       <div className="track-list">
         {tracks.map((track) => (
@@ -477,6 +737,8 @@ function AudioWorkspacePlayer({
                 onSeek={seek}
                 color={track.color}
                 zoom={zoom}
+                label={`Seek ${track.name}`}
+                range={single && edited ? [draft.start, draft.end] : undefined}
               />
             )}
             <div className="track-tools">
@@ -506,21 +768,39 @@ function AudioWorkspacePlayer({
               >
                 S
               </button>
-              <input
-                aria-label={`${track.name} gain`}
-                disabled={!ready || unavailable.has(track.id)}
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={gains[track.id] ?? 1}
-                onChange={(e) =>
-                  setGains((previous) => ({
-                    ...previous,
-                    [track.id]: Number(e.target.value),
-                  }))
-                }
-              />
+              {(!single || (editing && track.id !== "original")) && (
+                <label className="stem-level">
+                  <span>{Math.round((gains[track.id] ?? 1) * 100)}%</span>
+                  <input
+                    aria-label={`${track.name} gain`}
+                    disabled={!ready || unavailable.has(track.id)}
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={gains[track.id] ?? 1}
+                    onChange={(e) =>
+                      setDraft((previous) => ({
+                        ...previous,
+                        gains: {
+                          ...previous.gains,
+                          [track.id]: Number(e.target.value),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+              )}
+              {track.id !== "original" && (
+                <button
+                  disabled={Boolean(rangeError)}
+                  title={`Export ${track.name}`}
+                  aria-label={`Export ${track.name}`}
+                  onClick={() => setExportSelection(track.path)}
+                >
+                  <Download size={14} />
+                </button>
+              )}
               <button
                 aria-label={`Reveal ${track.name}`}
                 onClick={() => void reveal(track.path).catch(onError)}
@@ -532,7 +812,10 @@ function AudioWorkspacePlayer({
         ))}
       </div>
       <div className="transport">
-        <button aria-label="Return to start" onClick={() => seek(0)}>
+        <button
+          aria-label="Return to start"
+          onClick={() => seek(single ? draft.start : 0)}
+        >
           <SkipBack size={17} />
         </button>
         <button
@@ -549,7 +832,8 @@ function AudioWorkspacePlayer({
           )}
         </button>
         <span className="time-code">
-          {time(position)} <span>/ {time(duration)}</span>
+          {editing ? preciseTime(position) : time(position)}{" "}
+          <span>/ {time(duration)}</span>
         </span>
         <input
           className="seek"
@@ -580,6 +864,26 @@ function AudioWorkspacePlayer({
           onChange={(e) => setVolume(Number(e.target.value))}
         />
       </div>
+      {exportSelection !== null && (
+        <ResultExport
+          jobs={jobs}
+          selectedPath={exportSelection || undefined}
+          edits={
+            edited
+              ? {
+                  start: draft.start,
+                  end: draft.end,
+                  gains: Object.fromEntries(
+                    tracks
+                      .filter((t) => t.id !== "original")
+                      .map((t) => [t.path, gains[t.id] ?? 1]),
+                  ),
+                }
+              : undefined
+          }
+          onClose={() => setExportSelection(null)}
+        />
+      )}
       <div className="player-foot">
         <span>
           {ready

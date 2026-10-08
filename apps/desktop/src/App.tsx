@@ -55,6 +55,7 @@ import type {
   Settings,
 } from "./api";
 import { AudioWorkspace } from "./AudioWorkspace";
+import { ResultExport } from "./ResultExport";
 import { Dialog, Empty, Spinner } from "./components";
 import {
   InferenceControls,
@@ -131,6 +132,7 @@ export function App() {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [editor, setEditor] = useState<Preset | null>(null);
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [exportJob, setExportJob] = useState<Job | null>(null);
   const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
   const [query, setQuery] = useState("");
   const [historyQuery, setHistoryQuery] = useState("");
@@ -828,6 +830,14 @@ export function App() {
               jobs={[result]}
               onError={onError}
               onAgain={runAgain}
+              onBack={() => {
+                setSelectedJob(null);
+                if (screen !== "Queue" && screen !== "Library")
+                  setScreen("Library");
+              }}
+              backLabel={
+                screen === "Queue" ? "Back to Queue" : "Back to Library"
+              }
             />
           ) : screen === "Home" ? (
             <>
@@ -1132,7 +1142,7 @@ export function App() {
                   <p>
                     {screen === "Queue"
                       ? "GPU jobs run one at a time. The next recording starts when the current one is ready."
-                      : "Your separations, models and exported stems, together."}
+                      : "Open a result to listen or edit. Export your stems whenever you need them."}
                   </p>
                 </div>
                 <div className="actions">
@@ -1177,10 +1187,19 @@ export function App() {
                     </>
                   )}
                   <button
-                    onClick={() => void queueAction("clear_completed")}
+                    onClick={() =>
+                      setConfirmation({
+                        title: "Clear completed history?",
+                        body: "Completed results will disappear from Queue and Library. Audio files and exported copies stay on disk.",
+                        action: "Clear history",
+                        run: async () => {
+                          await queueAction("clear_completed");
+                        },
+                      })
+                    }
                     disabled={!completed.length}
                   >
-                    Clear completed
+                    Clear completed history
                   </button>
                 </div>
               </div>
@@ -1226,6 +1245,23 @@ export function App() {
                               job.created_at * 1000,
                             ).toLocaleDateString()}
                           </small>
+                          {job.status === "Completed" && (
+                            <small className="result-files">
+                              {job.result?.outputs
+                                .map((o) => o.stem)
+                                .join(" + ")}{" "}
+                              ·{" "}
+                              {time(
+                                job.result?.outputs[0]?.duration ??
+                                  job.source.duration,
+                              )}{" "}
+                              ·{" "}
+                              {job.result?.outputs[0]?.path
+                                .split(".")
+                                .pop()
+                                ?.toUpperCase()}
+                            </small>
+                          )}
                           {activeJob(job) && (
                             <div className="job-progress">
                               <Spinner
@@ -1263,14 +1299,30 @@ export function App() {
                         </span>
                         <div className="actions">
                           {job.status === "Completed" && (
-                            <button
-                              onClick={() => {
-                                setSelectedJob(job.id);
-                              }}
-                            >
-                              Listen
-                              <ArrowRight size={14} />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => {
+                                  setSelectedJob(job.id);
+                                }}
+                              >
+                                Open result
+                                <ArrowRight size={14} />
+                              </button>
+                              <button onClick={() => setExportJob(job)}>
+                                <Download size={14} />
+                                Export
+                              </button>
+                              <button
+                                title="Open output folder"
+                                aria-label={`Open folder for ${job.source.name}`}
+                                onClick={() => {
+                                  const path = job.result?.outputs[0]?.path;
+                                  if (path) void reveal(path).catch(onError);
+                                }}
+                              >
+                                <FolderOpen size={15} />
+                              </button>
+                            </>
                           )}
                           {["Failed", "Interrupted", "Cancelled"].includes(
                             job.status,
@@ -1337,7 +1389,16 @@ export function App() {
                             <button
                               aria-label={`Remove ${job.source.name} from history`}
                               onClick={() =>
-                                void queueAction("remove_job", job.id)
+                                job.status === "Completed"
+                                  ? setConfirmation({
+                                      title: "Remove this result from history?",
+                                      body: "This result will disappear from Queue and Library. Your source, created stems and exported copies stay on disk.",
+                                      action: "Remove from history",
+                                      run: async () => {
+                                        await queueAction("remove_job", job.id);
+                                      },
+                                    })
+                                  : void queueAction("remove_job", job.id)
                               }
                             >
                               <Trash2 size={15} />
@@ -2302,6 +2363,9 @@ export function App() {
             }}
           />
         </Dialog>
+      )}
+      {exportJob && (
+        <ResultExport jobs={[exportJob]} onClose={() => setExportJob(null)} />
       )}
       {modelDetail && (
         <Dialog title={modelDetail.name} onClose={() => setModelDetail(null)}>
