@@ -1,10 +1,10 @@
-# Separator 0.1.6
+# Separator 0.1.7
 
 Native audio separation for Windows x64, Linux x64 and Apple Silicon macOS 14+.
 
 Organize generations into projects, archive finished work, and move results between projects without moving audio. Play any stem directly or listen to all stems together, then export individual stems or selected results to your chosen folder.
 
-The new Support view offers optional PayPal and Bitcoin/Ethereum/Solana donations and credits Elias Kanakidis (@Elias02345). Automatic signed-update checks show an in-app notification; installation remains manual, with download progress and checks for active processing/downloads. Separation quality, Ultra models, custom ensembles and original files are preserved.
+The new Support view offers optional PayPal and Bitcoin/Ethereum/Solana donations, credits Elias (@Elias02345), and uses his first-person voice. Automatic signed-update checks show an in-app notification; installation remains manual, with download progress and checks for active processing/downloads. Separation quality, Ultra models, custom ensembles and original files are preserved.
 
 - Instrumental Ultra: Inst v1e+ and Becruily using upstream max-spec ensembling.
 - Vocal Ultra: Resurrection and Big Beta6x using upstream FFT averaging.
@@ -12,6 +12,7 @@ The new Support view offers optional PayPal and Bitcoin/Ethereum/Solana donation
 - Persistent jobs/presets, cancellation/retry, lossless exports, synchronized playback and blind range comparisons.
 - Private CPU/MPS runtime and optional verified NVIDIA CUDA installation; no system Python changes.
 - Source-built FFmpeg, original third-party notices and exact corresponding codec sources included.
+- Original Microsoft CRT license documents are retained and checksum-verified locally for reliable Windows packaging.
 
 Choose the `.exe` installer on Windows, `.AppImage` or `.deb` on Linux, and `.dmg` on Apple Silicon. `.app.tar.gz` and `.sig` files serve the signed in-app updater. SHA256SUMS covers every published installer/update/source asset.
 

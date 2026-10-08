@@ -1220,7 +1220,7 @@
           "type": "string"
         },
         "container_image": {
-          "default": "separator-engine:0.1.6",
+          "default": "separator-engine:0.1.7",
           "title": "Container Image",
           "type": "string"
         }

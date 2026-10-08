@@ -42,11 +42,11 @@ For development and validation, see [BUILDING.md](BUILDING.md), [CONTRIBUTING.md
 
 ## Contributors
 
-[Elias Kanakidis (@Elias02345)](https://github.com/Elias02345) — creator, maintainer and contributor.
+[Elias (@Elias02345)](https://github.com/Elias02345) — creator, maintainer and contributor.
 
 ## Support development
 
-Enjoying Separator? [Buy Elias a coffee or donate with PayPal](https://www.paypal.com/paypalme/EliasK09). The app’s **Support** view also provides copyable crypto addresses. Donations are optional; all features remain available.
+Enjoying Separator? [Buy me a coffee or donate with PayPal](https://www.paypal.com/paypalme/EliasK09). Your support helps me keep improving the app. The app’s **Support** view also provides copyable crypto addresses. Donations are optional; all features remain available.
 
 - Bitcoin (BTC): `bc1qphk3h7sw6j429c62ypw6zxgmkfeevmxs437ze3`
 - Ethereum (ETH): `0x81deF905D66fd17433003e749f1e69bCFd95664d`

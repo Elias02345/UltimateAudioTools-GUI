@@ -13,7 +13,7 @@ import type {
 } from "../../../packages/shared/types";
 
 export type { AudioMetadata, Capabilities, Job, ModelInfo, Preset, Project, Settings };
-export const BRAND = { name: "Separator", version: "0.1.6" };
+export const BRAND = { name: "Separator", version: "0.1.7" };
 export function validate<T>(name: string, value: unknown): T {
   const check = (validators as Record<string, ValidateFunction>)[name];
   if (!check || !check(value))

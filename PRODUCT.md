@@ -16,6 +16,10 @@ Make excellent local stem separation an ordinary desktop workflow: import, choos
 
 Precise, calm, approachable. Temporary product name: Separator.
 
+## Creator Voice
+
+Use only Elias's first name in the app. Write creator and donation messages in his first-person voice: "I'm Elias", "Buy me a coffee", and "helps me keep improving the app". Keep the linked GitHub account @Elias02345. Do not display his surname or refer to him in the third person in support copy. Preserve application identifiers and existing data paths.
+
 ## Anti-references
 
 No generic dashboard cards, decorative gradients, glass panels, fake meters or terminal requirements. Raycast's compact interaction, Linear's hierarchy and professional audio software's transport are references, without cloning them.

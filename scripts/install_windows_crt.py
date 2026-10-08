@@ -6,8 +6,9 @@ import os
 import re
 import shutil
 import subprocess
-import urllib.request
 from pathlib import Path
+
+LICENSES = Path(__file__).resolve().parents[1] / "runtime/licenses/windows"
 
 DOCUMENTS = {
     "Visual-Studio-2022-Enterprise-Professional-License-EN.docx": (
@@ -23,7 +24,20 @@ DOCUMENTS = {
 }
 
 
+def verified_license_documents():
+    documents = {}
+    for name, (_, expected) in DOCUMENTS.items():
+        content = (LICENSES / name).read_bytes()
+        if hashlib.sha256(content).hexdigest() != expected:
+            raise ValueError(
+                "Microsoft license document checksum changed; review the new original before packaging."
+            )
+        documents[name] = content
+    return documents
+
+
 def install(runtime: Path):
+    documents = verified_license_documents()
     vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / (
         "Microsoft Visual Studio/Installer/vswhere.exe"
     )
@@ -79,12 +93,7 @@ def install(runtime: Path):
         files.append(
             {"name": path.name, "version": version, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
         )
-    for name, (url, expected) in DOCUMENTS.items():
-        content = urllib.request.urlopen(url, timeout=60).read()
-        if hashlib.sha256(content).hexdigest() != expected:
-            raise ValueError(
-                "Microsoft license document checksum changed; review the new original before packaging."
-            )
+    for name, content in documents.items():
         (notices / name).write_bytes(content)
     (notices / "manifest.json").write_text(
         json.dumps(

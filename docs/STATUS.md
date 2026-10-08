@@ -8,7 +8,7 @@ Linux development host: RTX 3070 8 GB. Actual CUDA float32 separation passed for
 
 Actual native-window tests passed first-run setup, native drag/drop event import, Ultra enqueue/completion, result loading and playback with advancing transport time. WebKit's asset URI limitation is handled with a token-scoped, ranged loopback preview stream. NVIDIA/Wayland renderer compatibility is handled before GTK starts.
 
-Current automated local checks: 71 Python tests, 19 frontend tests, 2 Rust tests; lint/typecheck/build/clippy passed. Real Torch and ONNX CUDA operations passed. A private CUDA installation transaction, real container CPU inference/cancellation, native range comparison, moved-source playback recovery and minimum-window library search have also passed. A fresh production AppImage also passed private-runtime readiness, production CSP, real native preview playback and minimum-window checks. Test reports/screenshots are in the development-only `.test-output` folder.
+Current automated local checks: 76 Python tests, 19 frontend tests, 2 Rust tests; lint/typecheck/build/clippy passed. Real Torch and ONNX CUDA operations passed. A private CUDA installation transaction, real container CPU inference/cancellation, native range comparison, moved-source playback recovery and minimum-window library search have also passed. A fresh production AppImage also passed private-runtime readiness, production CSP, real native preview playback and minimum-window checks. Test reports/screenshots are in the development-only `.test-output` folder.
 
 The default Fast MDX model also passed real 20-second CUDA inference and unprivileged CPU-container inference. A fresh 0.1.1 private CUDA installation from the packaged CPU runtime passed actual Torch/ONNX GPU operations and preserved 85 dependency license notices. Compressed metadata downloads now distinguish decoded file sizes from HTTP transfer sizes; truncated transfers and publisher integrity failures remain rejected. MDX verifies the requested ONNX provider and GPU index instead of accepting a silent CPU fallback.
 
@@ -37,6 +37,8 @@ A host NVIDIA 615.71.09 display-driver hang temporarily blocked an additional is
 The Linux production-window check now performs real Fast CPU inference on a six-second generated recording, then tests the full result export workflow, including overlapping-playback prevention and dialog keyboard behavior.
 
 
-## Projects, support and updates (0.1.6)
+## Projects, support and updates (0.1.7)
 
 A real native development window passed project creation, new/existing generation assignment, persistence, rename, archive/restore and safe removal. Two genuine CPU separations produced stems used for audible single-stem playback, muted-stem recovery, switching, all-stem playback and exact multi-result batch export. Original recording/stem hashes remained identical. Support addresses/contributor attribution, the real native signed-update checker and 900 × 640 layout checks passed. Native CI repeats these workflows against the actual packaged application. Frontend tests cover updater progress, offline errors, installation safety, resource cleanup, donation links and address copying; backend tests cover legacy state, atomic project changes and scoped history cleanup.
+
+Creator/support messages use only Elias’s first name and his first-person voice, documented in `PRODUCT.md`. The 0.1.6 release candidate was canceled before publication. Windows packaging previously received HTTP 403 for an original Microsoft license document; both exact checksum-verified originals are now retained in the repository and verified before CRT staging.

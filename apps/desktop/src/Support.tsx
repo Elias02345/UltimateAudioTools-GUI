@@ -34,8 +34,7 @@ export function Support({
         <div>
           <h1>Enjoying Separator?</h1>
           <p>
-            A coffee or a donation helps Elias keep building and improving the
-            app.
+            A coffee or a donation helps me keep building and improving the app.
           </p>
         </div>
         <Coffee size={28} />
@@ -79,8 +78,8 @@ export function Support({
         ))}
       </div>
       <div className="support-credit">
-        <h2>Made by Elias Kanakidis</h2>
-        <p>Creator, maintainer and contributor to Separator.</p>
+        <h2>I'm Elias</h2>
+        <p>I created Separator and continue to maintain and improve it.</p>
         <button onClick={() => void openUrl(CONTRIBUTOR).catch(onError)}>
           <Github size={16} /> @Elias02345 <ExternalLink size={14} />
         </button>

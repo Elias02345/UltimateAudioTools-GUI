@@ -26,4 +26,4 @@ Select several completed results in Library and choose **Export selected results
 
 Settings provides automatic startup/hourly signed-release checks and a manual **Check for signed updates** action. Available updates appear as an in-app notice. Review the update, then explicitly choose **Install and restart**; finish or pause processing and finish downloads first. Offline checks can be retried. Automatic checks contact GitHub, without uploading audio.
 
-**Support** offers the creator’s PayPal link and copyable Bitcoin, Ethereum and Solana addresses. Donations are optional. The app and repository credit Elias Kanakidis (@Elias02345).
+**Support** offers the creator’s PayPal link and copyable Bitcoin, Ethereum and Solana addresses. Donations are optional. The app and repository credit Elias (@Elias02345).

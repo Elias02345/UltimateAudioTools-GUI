@@ -118,7 +118,7 @@ class Settings(StrictModel):
     model_directory: str = ""
     engine: Literal["native", "container"] = "native"
     container_command: Literal["docker", "podman"] = "docker"
-    container_image: str = "separator-engine:0.1.6"
+    container_image: str = "separator-engine:0.1.7"
 
 
 class Request(StrictModel):

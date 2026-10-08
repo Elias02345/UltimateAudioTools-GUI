@@ -1,16 +1,19 @@
 # Changelog
 
-## 0.1.6 — Projects, support and updates
+## 0.1.7 — Projects, support and updates
 
 - Create, rename, archive and restore projects; assign new generations and move existing results without moving or deleting audio.
 - Remember the current project, select multiple results for batch export, and scope Library history cleanup to its visible results.
 - Play individual stems directly, unmute on explicit Play, switch without losing the transport position, and play all stems together.
 - Make individual stem export visible and add select-all/clear controls to export dialogs.
 - Add optional PayPal and Bitcoin/Ethereum/Solana donations using the creator’s supplied addresses.
-- Credit Elias Kanakidis (@Elias02345) as creator, maintainer and contributor in the app and repository.
+- Credit Elias (@Elias02345) as creator, maintainer and contributor in the app and repository.
 - Check signed releases automatically on startup/hourly, show a persistent in-app update notice, and display download progress with manual installation and recoverable errors.
 - Recheck processing/download safety before update installation and release native updater resources after checks or failures.
+- Use only Elias’s first name and first-person creator/support messages.
+- Keep exact checksum-verified Microsoft license originals in the repository so Windows packaging works without downloading them on every build.
 - Preserve separation quality, Ultra models, custom ensembles and original audio files.
+- The 0.1.6 candidate was not published.
 
 ## 0.1.5 — Results, editing and export
 

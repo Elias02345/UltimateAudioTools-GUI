@@ -847,7 +847,7 @@ export function App() {
               setSelectedJob(null);
             }}
           >
-            <Coffee size={14} /> Buy Elias a coffee
+            <Coffee size={14} /> Buy me a coffee
           </button>
           <p>
             <ShieldCheck size={13} />
@@ -2559,7 +2559,7 @@ export function App() {
               <section className="settings-section">
                 <h2>Diagnostics & About</h2>
                 <p>
-                  Created and maintained by Elias Kanakidis.{" "}
+                  I'm Elias. I created and maintain Separator.{" "}
                   <button
                     className="text-button"
                     onClick={() => void openUrl(CONTRIBUTOR).catch(onError)}
