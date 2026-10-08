@@ -84,7 +84,10 @@ def main():
     window.js('document.querySelector("[data-testid=play-result]").click();')
     window.wait(lambda: window.js("return window.__testAudio.every(a=>a.currentTime>2.4&&!a.paused);"))
     window.wait(lambda: window.js("return window.__testAudio.every(a=>a.paused);"), seconds=10)
-    assert abs(window.js("return window.__testAudio[1].volume;") - 0.425) < 1e-5
+    assert window.js(
+        "const audible=window.__testAudio.filter(a=>!a.muted);"
+        "return audible.length===1&&audible.every(a=>Math.abs(a.volume-.425)<1e-5);"
+    )
     window.screenshot(root / "editor.png")
     window.click("Back to Library")
     assert (
