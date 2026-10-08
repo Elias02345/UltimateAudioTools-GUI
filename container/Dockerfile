@@ -14,9 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY runtime/ /opt/python/
 COPY --from=codecs /output/ /opt/python/
 COPY engine/separator_engine /opt/engine/separator_engine
+RUN chmod -R a+rX /opt/python /opt/engine
+ENV PATH="/opt/python/bin:${PATH}" PYTHONPATH=/opt/engine PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1 HOME=/tmp
+USER 65534:65534
 RUN /opt/python/bin/python3 -I /opt/engine/separator_engine/runtime_probe.py \
     && /opt/python/separator-bin/ffmpeg -hide_banner -version
-ENV PATH="/opt/python/bin:${PATH}" PYTHONPATH=/opt/engine PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1 HOME=/tmp
+USER 0:0
 ARG BACKEND=cpu
 LABEL org.separator.protocol="1" org.separator.version="0.1.1" org.separator.backend="${BACKEND}"
 CMD ["python", "-u", "-m", "separator_engine.worker", "serve", "/models", "/state"]

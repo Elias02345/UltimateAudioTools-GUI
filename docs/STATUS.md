@@ -10,7 +10,7 @@ Actual native-window tests passed first-run setup, native drag/drop event import
 
 Current automated local checks: 44 Python tests, 8 frontend contract tests, 2 Rust tests; lint/typecheck/build/clippy passed. Real Torch and ONNX CUDA operations passed. A private CUDA installation transaction, real container CPU inference/cancellation, native range comparison, moved-source playback recovery and minimum-window library search have also passed. A fresh production AppImage also passed private-runtime readiness, production CSP, real native preview playback and minimum-window checks. Test reports/screenshots are in the development-only `.test-output` folder.
 
-The default Fast MDX model also passed real 20-second CUDA inference. Compressed metadata downloads now distinguish decoded file sizes from HTTP transfer sizes; truncated transfers and publisher integrity failures remain rejected. MDX verifies the requested ONNX provider and GPU index instead of accepting a silent CPU fallback.
+The default Fast MDX model also passed real 20-second CUDA inference and unprivileged CPU-container inference. A fresh 0.1.1 private CUDA installation from the packaged CPU runtime passed actual Torch/ONNX GPU operations and preserved 85 dependency license notices. Compressed metadata downloads now distinguish decoded file sizes from HTTP transfer sizes; truncated transfers and publisher integrity failures remain rejected. MDX verifies the requested ONNX provider and GPU index instead of accepting a silent CPU fallback.
 
 ## Release verification
 
