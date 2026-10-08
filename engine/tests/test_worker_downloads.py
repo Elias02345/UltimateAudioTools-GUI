@@ -3,6 +3,7 @@
 import gzip
 import hashlib
 import importlib
+import logging
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,6 +24,41 @@ def worker(monkeypatch):
     monkeypatch.setattr(module, "emit", lambda kind, **data: events.append((kind, data)))
     module.test_events = events
     return module
+
+
+@pytest.mark.parametrize(
+    ("device", "family", "requested", "pytorch", "supported"),
+    [
+        ("cpu", "mdx", "float32", False, True),
+        ("cuda", "mel_band_roformer", "float16", True, True),
+        ("cuda", "bs_roformer", "autocast", True, True),
+        ("cpu", "mel_band_roformer", "float16", True, False),
+        ("cuda", "demucs", "float16", True, False),
+        ("cuda", "mdx", "float16", False, False),
+        ("cuda", "mdx", "autocast", False, False),
+    ],
+)
+def test_requested_precision_matches_upstream_policy(
+    worker, device, family, requested, pytorch, supported
+):
+    import torch
+    from audio_separator.separator.execution_policy import resolve_execution_policy
+
+    policy = resolve_execution_policy(
+        device=torch.device(device),
+        model_family=family,
+        use_autocast=requested == "autocast",
+        use_native_fp16=requested == "float16",
+        use_torch_compile=False,
+        logger=logging.getLogger(__name__),
+        uses_pytorch_inference=pytorch,
+    )
+    separator = SimpleNamespace(effective_precision=policy.precision)
+    if supported:
+        worker.verify_precision(separator, requested, "selected-model", device)
+    else:
+        with pytest.raises(ValueError, match="not supported.*inference was not started"):
+            worker.verify_precision(separator, requested, "selected-model", device)
 
 
 @pytest.fixture

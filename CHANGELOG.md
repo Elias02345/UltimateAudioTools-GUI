@@ -4,6 +4,7 @@
 
 - Fix compressed model metadata downloads while preserving publisher size, checksum and truncated-transfer checks.
 - Honor the selected GPU for MDX/ONNX inference and reject silent CUDA-to-CPU provider fallback.
+- Reject unsupported precision combinations before inference instead of silently changing the requested precision.
 - Build optional containers from runtimes on another filesystem by copying when hard links are unavailable.
 - Normalize dependency permissions inside container images and verify their runtime as an unprivileged user.
 - Keep the first release gated on all installer and code checks; the superseded 0.1.0 tag was not published.

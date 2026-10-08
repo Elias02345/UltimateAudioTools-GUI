@@ -34,6 +34,16 @@ def emit(kind: str, **data):
     WIRE.flush()
 
 
+def verify_precision(separator, requested: str, model: str, device: str):
+    expected = {"float32": "fp32", "autocast": "autocast", "float16": "native_fp16"}[requested]
+    actual = separator.effective_precision
+    if actual != expected:
+        raise ValueError(
+            f"{requested} precision is not supported by {model} on {device}. "
+            "Choose Float32 or a supported model/device combination; inference was not started."
+        )
+
+
 def error_message(error: Exception) -> str:
     message = str(error)
     lower = message.lower()
@@ -330,6 +340,7 @@ class Engine:
                 getattr(separator, "_onnx_device", None)
                 or getattr(separator.model_instance, "torch_device", separator.torch_device)
             )
+            verify_precision(separator, request.preset.parameters.precision, model, actual_device)
             emit(
                 "stage",
                 stage="Processing",
