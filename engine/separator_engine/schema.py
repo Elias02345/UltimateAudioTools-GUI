@@ -113,11 +113,12 @@ class Settings(StrictModel):
     theme: Literal["dark", "light", "system"] = "dark"
     reduced_motion: bool = False
     notifications: bool = False
+    check_updates: bool = True
     default_quality: Literal["Fast", "Balanced", "Ultra"] = "Ultra"
     model_directory: str = ""
     engine: Literal["native", "container"] = "native"
     container_command: Literal["docker", "podman"] = "docker"
-    container_image: str = "separator-engine:0.1.5"
+    container_image: str = "separator-engine:0.1.6"
 
 
 class Request(StrictModel):
@@ -184,6 +185,7 @@ class JobResult(StrictModel):
 
 class Job(StrictModel):
     id: str
+    project_id: str | None = None
     status: Literal[
         "Pending",
         "Preparing",
@@ -218,6 +220,20 @@ class GPUInfo(StrictModel):
     vram: int
 
 
+class Project(StrictModel):
+    id: str = Field(min_length=1, max_length=120, pattern=r"^[a-zA-Z0-9_-]+$")
+    name: str = Field(min_length=1, max_length=100)
+    created_at: float = Field(ge=0)
+    archived: bool = False
+
+    @model_validator(mode="after")
+    def valid_name(self):
+        self.name = self.name.strip()
+        if not self.name:
+            raise ValueError("Give the project a name.")
+        return self
+
+
 class Capabilities(StrictModel):
     platform: str
     architecture: str
@@ -247,3 +263,4 @@ class Contract(StrictModel):
     job: Job
     model: ModelInfo
     capabilities: Capabilities
+    project: Project

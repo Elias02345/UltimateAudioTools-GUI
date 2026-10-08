@@ -11,3 +11,19 @@ Edit drafts are saved in the local app profile for that result. They change play
 The last successful export folder is remembered. Existing filenames receive a numeric suffix, including on removable drives. Export errors remain in the dialog so you can correct the destination or selection. On success, click a filename to preview the exported audio in the app, or **Open folder** to find the files. Starting exported playback pauses the result player; closing the dialog stops the preview.
 
 Removing a result or clearing completed history requires confirmation. It removes records from both Library and Queue; source recordings, created stems and exported copies remain on disk.
+
+## Projects and batch exports
+
+Create a project in **Projects** and choose it under **Save generations to** on Home. Existing recordings remain unfiled until you assign them. In Library, select results, choose **Move to**, and click **Move selected**. Moving changes only grouping; audio stays at its original location.
+
+Open a project to see its results. Your current project is remembered across app restarts. Archive completed projects to keep the active project list tidy; restore them whenever needed. Removing a project keeps its generations as unfiled results and preserves audio, edits and exported copies.
+
+Each track has **Play** and **Export** actions. Explicit Play selects and unmutes that track while preserving the playback position. **Play all stems** plays the separated tracks together and excludes the original. Saved edit levels still apply while listening.
+
+Select several completed results in Library and choose **Export selected results** to export their stems together. Use **Select all stems** or **Clear selection** in the export dialog, then choose an existing destination folder. Exact-copy exports preserve source samples; filenames are made unique when needed.
+
+## Updates and supporting the creator
+
+Settings provides automatic startup/hourly signed-release checks and a manual **Check for signed updates** action. Available updates appear as an in-app notice. Review the update, then explicitly choose **Install and restart**; finish or pause processing and finish downloads first. Offline checks can be retried. Automatic checks contact GitHub, without uploading audio.
+
+**Support** offers the creator’s PayPal link and copyable Bitcoin, Ethereum and Solana addresses. Donations are optional. The app and repository credit Elias Kanakidis (@Elias02345).

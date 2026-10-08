@@ -12,5 +12,6 @@ export declare const ModelInfo: ValidateFunction;
 export declare const OutputResult: ValidateFunction;
 export declare const OutputSettings: ValidateFunction;
 export declare const Preset: ValidateFunction;
+export declare const Project: ValidateFunction;
 export declare const Request: ValidateFunction;
 export declare const Settings: ValidateFunction;

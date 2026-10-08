@@ -351,3 +351,90 @@ def test_comparison_cleanup_refuses_active_jobs(supervisor, recording):
     with pytest.raises(ValueError, match="Finish or cancel"):
         supervisor.dispatch("cleanup_comparison", {"id": "active-group"})
     job["status"] = "Cancelled"
+
+
+def test_projects_are_additive_and_durable(supervisor, recording):
+    before = recording.read_bytes()
+    legacy = supervisor.dispatch(
+        "enqueue",
+        {
+            "requests": [
+                JobRequest(
+                    path=str(recording), preset=Preset.model_validate(builtin_presets()[0])
+                ).model_dump()
+            ]
+        },
+    )[0]
+    assert supervisor.dispatch("initialize", {})["projects"] == []
+    assert Job.model_validate(legacy).project_id is None
+    projects = supervisor.dispatch("create_project", {"name": "  Album 🎵  "})
+    project = projects[0]
+    assert project["name"] == "Album 🎵"
+    supervisor.dispatch("assign_jobs", {"ids": [legacy["id"]], "project_id": project["id"]})
+    supervisor.dispatch("rename_project", {"id": project["id"], "name": "Album two"})
+    assert supervisor.state.get("projects")[0]["name"] == "Album two"
+    assert supervisor.state.jobs()[0]["project_id"] == project["id"]
+    assert recording.read_bytes() == before
+
+
+def test_project_batch_validation_is_atomic(supervisor, recording):
+    project = supervisor.dispatch("create_project", {"name": "Session"})[0]
+    job = supervisor.dispatch(
+        "enqueue",
+        {
+            "requests": [
+                JobRequest(
+                    path=str(recording), preset=Preset.model_validate(builtin_presets()[0])
+                ).model_dump()
+            ]
+        },
+    )[0]
+    with pytest.raises(ValueError, match="Job not found"):
+        supervisor.dispatch("assign_jobs", {"ids": [job["id"], "missing"], "project_id": project["id"]})
+    assert supervisor.get_job(job["id"])["project_id"] is None
+    assert supervisor.state.jobs()[0]["project_id"] is None
+    with pytest.raises(ValueError, match="Project not found"):
+        supervisor.dispatch("assign_jobs", {"ids": [job["id"]], "project_id": "missing"})
+    with pytest.raises(ValueError):
+        supervisor.dispatch("create_project", {"name": "session"})
+    with pytest.raises(ValidationError):
+        supervisor.dispatch("rename_project", {"id": project["id"], "name": "  "})
+    assert supervisor.state.get("projects")[0]["name"] == "Session"
+
+
+def test_archiving_and_removing_projects_preserves_generations(supervisor, recording):
+    project = supervisor.dispatch("create_project", {"name": "Finished work"})[0]
+    request = JobRequest(path=str(recording), preset=Preset.model_validate(builtin_presets()[0])).model_dump()
+    job = supervisor.dispatch("enqueue", {"requests": [request], "project_id": project["id"]})[0]
+    supervisor.dispatch("archive_project", {"id": project["id"], "archived": True})
+    with pytest.raises(ValueError, match="active project"):
+        supervisor.dispatch("enqueue", {"requests": [request], "project_id": project["id"]})
+    assert len(supervisor.jobs) == 1
+    supervisor.dispatch("delete_project", {"id": project["id"]})
+    assert supervisor.get_job(job["id"])["project_id"] is None
+    assert supervisor.state.get("projects") == []
+    assert len(supervisor.state.jobs()) == 1
+    assert recording.exists()
+
+
+def test_project_transaction_rolls_back_all_metadata(tmp_path):
+    state = State(tmp_path)
+    state.save_job({"id": "existing", "project_id": None})
+    with pytest.raises(ValueError, match="not saved"):
+        state.save_project_state(
+            [{"id": "new"}], [{"id": "existing", "project_id": "new"}, {"id": "missing", "project_id": "new"}]
+        )
+    assert state.get("projects", []) == []
+    assert state.jobs()[0]["project_id"] is None
+    state.close()
+
+
+def test_clear_history_can_be_scoped_to_selected_results(supervisor, recording):
+    request = JobRequest(path=str(recording), preset=Preset.model_validate(builtin_presets()[0])).model_dump()
+    first, second = supervisor.dispatch("enqueue", {"requests": [request, request]})
+    for job in [first, second]:
+        job["status"] = "Completed"
+        supervisor.notify_job(job)
+    supervisor.dispatch("clear_completed", {"ids": [first["id"]]})
+    assert [j["id"] for j in supervisor.jobs] == [second["id"]]
+    assert recording.exists()

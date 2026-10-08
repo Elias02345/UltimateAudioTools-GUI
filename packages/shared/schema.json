@@ -357,6 +357,18 @@
           "title": "Id",
           "type": "string"
         },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
         "status": {
           "enum": [
             "Pending",
@@ -505,6 +517,7 @@
       },
       "required": [
         "id",
+        "project_id",
         "status",
         "created_at",
         "request",
@@ -1052,6 +1065,42 @@
       "title": "Preset",
       "type": "object"
     },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 120,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "created_at": {
+          "minimum": 0,
+          "title": "Created At",
+          "type": "number"
+        },
+        "archived": {
+          "default": false,
+          "title": "Archived",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "created_at",
+        "archived"
+      ],
+      "title": "Project",
+      "type": "object"
+    },
     "Request": {
       "additionalProperties": false,
       "properties": {
@@ -1132,6 +1181,11 @@
           "title": "Notifications",
           "type": "boolean"
         },
+        "check_updates": {
+          "default": true,
+          "title": "Check Updates",
+          "type": "boolean"
+        },
         "default_quality": {
           "default": "Ultra",
           "enum": [
@@ -1166,7 +1220,7 @@
           "type": "string"
         },
         "container_image": {
-          "default": "separator-engine:0.1.5",
+          "default": "separator-engine:0.1.6",
           "title": "Container Image",
           "type": "string"
         }
@@ -1180,6 +1234,7 @@
         "theme",
         "reduced_motion",
         "notifications",
+        "check_updates",
         "default_quality",
         "model_directory",
         "engine",
@@ -1209,6 +1264,9 @@
     },
     "capabilities": {
       "$ref": "#/$defs/Capabilities"
+    },
+    "project": {
+      "$ref": "#/$defs/Project"
     }
   },
   "required": [
@@ -1217,7 +1275,8 @@
     "settings",
     "job",
     "model",
-    "capabilities"
+    "capabilities",
+    "project"
   ],
   "title": "Contract",
   "type": "object"

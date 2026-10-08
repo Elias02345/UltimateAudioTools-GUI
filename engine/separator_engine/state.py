@@ -51,6 +51,19 @@ class State:
         with self.lock, self.db:
             self.db.execute("DELETE FROM jobs WHERE id=?", (job_id,))
 
+    def save_project_state(self, projects: list[dict], jobs: list[dict]) -> None:
+        """Commit grouping changes together; audio and queue positions are untouched."""
+        with self.lock, self.db:
+            self.db.execute(
+                "INSERT OR REPLACE INTO kv VALUES (?, ?)", ("projects", json.dumps(projects))
+            )
+            for job in jobs:
+                cursor = self.db.execute(
+                    "UPDATE jobs SET payload=? WHERE id=?", (json.dumps(job), job["id"])
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError("Job not found; project changes were not saved.")
+
     def reorder(self, ids: list[str]) -> None:
         with self.lock, self.db:
             current = {r[0] for r in self.db.execute("SELECT id FROM jobs")}

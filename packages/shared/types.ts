@@ -57,12 +57,14 @@ export type AutoDownload = boolean;
 export type Theme = "dark" | "light" | "system";
 export type ReducedMotion = boolean;
 export type Notifications = boolean;
+export type CheckUpdates = boolean;
 export type DefaultQuality = "Fast" | "Balanced" | "Ultra";
 export type ModelDirectory = string;
 export type Engine1 = "native" | "container";
 export type ContainerCommand = "docker" | "podman";
 export type ContainerImage = string;
 export type Id2 = string;
+export type ProjectId = string | null;
 export type Status =
   | "Pending"
   | "Preparing"
@@ -154,6 +156,10 @@ export type DiskFree = number;
 export type Backends = string[];
 export type RecommendedDevice = string;
 export type Containers = string[];
+export type Id4 = string;
+export type Name4 = string;
+export type CreatedAt1 = number;
+export type Archived = boolean;
 
 export interface Contract {
   request: Request;
@@ -162,6 +168,7 @@ export interface Contract {
   job: Job;
   model: ModelInfo;
   capabilities: Capabilities;
+  project: Project;
 }
 export interface Request {
   v: V;
@@ -222,6 +229,7 @@ export interface Settings {
   theme: Theme;
   reduced_motion: ReducedMotion;
   notifications: Notifications;
+  check_updates: CheckUpdates;
   default_quality: DefaultQuality;
   model_directory: ModelDirectory;
   engine: Engine1;
@@ -230,6 +238,7 @@ export interface Settings {
 }
 export interface Job {
   id: Id2;
+  project_id: ProjectId;
   status: Status;
   created_at: CreatedAt;
   request: JobRequest;
@@ -328,4 +337,10 @@ export interface GPUInfo {
   index: Index;
   name: Name3;
   vram: Vram;
+}
+export interface Project {
+  id: Id4;
+  name: Name4;
+  created_at: CreatedAt1;
+  archived: Archived;
 }

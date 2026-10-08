@@ -180,25 +180,27 @@ def smoke(application: Path, report: Path):
                 session_file.write_text(json.dumps({"value": {"sessionId": session}}))
                 project = Path(__file__).resolve().parents[1]
                 python = project / "apps/desktop/src-tauri/resources/runtime/python/bin/python3"
-                export_checks = profile / "export-checks"
-                subprocess.run(
-                    [
-                        str(python),
-                        str(project / "scripts/native_results.py"),
-                        "--session-file",
-                        str(session_file),
-                        "--server",
-                        server,
-                        "--job-id",
-                        job["id"],
-                        "--output",
-                        str(export_checks),
-                    ],
-                    check=True,
-                    timeout=180,
-                    env={**env, "PYTHONNOUSERSITE": "1", "PYTHONPATH": ""},
-                )
-                result_workflow = json.loads((export_checks / "report.json").read_text())
+                workflows = {}
+                for name, script in [("results", "native_results.py"), ("projects", "native_projects.py")]:
+                    checks_directory = profile / f"{name}-checks"
+                    subprocess.run(
+                        [
+                            str(python),
+                            str(project / "scripts" / script),
+                            "--session-file",
+                            str(session_file),
+                            "--server",
+                            server,
+                            "--job-id",
+                            job["id"],
+                            "--output",
+                            str(checks_directory),
+                        ],
+                        check=True,
+                        timeout=300,
+                        env={**env, "PYTHONNOUSERSITE": "1", "PYTHONPATH": ""},
+                    )
+                    workflows[name] = json.loads((checks_directory / "report.json").read_text())
                 window.call("/window/rect", {"width": 900, "height": 640})
                 assert window.js("return document.documentElement.scrollWidth <= window.innerWidth"), (
                     "Minimum window overflows"
@@ -211,7 +213,8 @@ def smoke(application: Path, report: Path):
                             "application": application.name,
                             "capabilities": caps,
                             "readiness": checks,
-                            "result_workflow": result_workflow,
+                            "result_workflow": workflows["results"],
+                            "project_workflow": workflows["projects"],
                             "checks": [
                                 "fresh profile",
                                 "production CSP",
@@ -220,6 +223,7 @@ def smoke(application: Path, report: Path):
                                 "native preview playback advances",
                                 "real Fast CPU separation",
                                 "native result editing and export",
+                                "projects, stem actions, batch export, support and updates",
                                 "minimum window",
                             ],
                         },

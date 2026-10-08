@@ -39,6 +39,11 @@ def main():
         )
 
     window.click("Library")
+    window.js(
+        "const e=document.querySelector('[aria-label=\"Filter results by project\"]');"
+        "if(e){Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(e,'all');"
+        "e.dispatchEvent(new Event('change',{bubbles:true}));}"
+    )
     window.wait_text("Made from your music")
     set_input('[aria-label="Search history"]', job["source"]["name"])
     window.wait(

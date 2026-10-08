@@ -23,7 +23,7 @@ from . import PROTOCOL_VERSION, __version__
 from .audio import clear_cache, directory_size, ffmpeg, input_path, metadata, preview, waveform
 from .catalog import Catalog, builtin_presets
 from .runtime import RuntimeInstaller
-from .schema import Job, JobRequest, Preset, Request, Settings
+from .schema import Job, JobRequest, Preset, Project, Request, Settings
 from .state import State
 
 ACTIVE = {"Preparing", "Downloading model", "Loading model", "Processing", "Ensembling", "Encoding"}
@@ -475,6 +475,7 @@ class Supervisor:
                 "settings": self.settings.model_dump(),
                 "jobs": [Job.model_validate(j).model_dump() for j in self.jobs],
                 "presets": self.presets(),
+                "projects": self.state.get("projects", []),
                 "running": self.running,
                 "runtime_install": self.runtime_installer.status,
             }
@@ -550,6 +551,14 @@ class Supervisor:
             requests = [JobRequest.model_validate(r) for r in params["requests"]]
             if not requests or len(requests) > 10000:
                 raise ValueError("Choose between one and 10,000 recordings.")
+            with self.lock:
+                project_id = params.get("project_id")
+                if project_id is not None:
+                    project = next(
+                        (p for p in self.state.get("projects", []) if p["id"] == project_id), None
+                    )
+                    if project is None or project.get("archived", False):
+                        raise ValueError("Choose an active project for new recordings.")
             added = []
             for request in requests:
                 job_id = uuid.uuid4().hex
@@ -563,6 +572,7 @@ class Supervisor:
                     )
                 job = {
                     "id": job_id,
+                    "project_id": project_id,
                     "status": "Pending",
                     "created_at": time.time(),
                     "request": request.model_dump(),
@@ -571,6 +581,12 @@ class Supervisor:
                     "result": None,
                 }
                 with self.lock:
+                    # Project metadata may have changed while audio was inspected.
+                    if project_id is not None and not any(
+                        p["id"] == project_id and not p.get("archived", False)
+                        for p in self.state.get("projects", [])
+                    ):
+                        raise ValueError("Choose an active project for new recordings.")
                     self.jobs.append(job)
                     self.notify_job(job)
                 added.append(job)
@@ -580,6 +596,55 @@ class Supervisor:
             return added
         if method == "list_jobs":
             return [Job.model_validate(j).model_dump() for j in self.jobs]
+        if method == "list_projects":
+            return self.state.get("projects", [])
+        if method in {"create_project", "rename_project", "archive_project", "delete_project", "assign_jobs"}:
+            with self.lock:
+                projects = self.state.get("projects", [])
+                changed_jobs = []
+                if method == "create_project":
+                    project = Project(id=uuid.uuid4().hex, name=params["name"], created_at=time.time())
+                    if any(p["name"].casefold() == project.name.casefold() for p in projects):
+                        raise ValueError("A project with this name already exists.")
+                    projects.append(project.model_dump())
+                elif method == "assign_jobs":
+                    project_id = params.get("project_id")
+                    if project_id is not None and not any(p["id"] == project_id for p in projects):
+                        raise ValueError("Project not found.")
+                    ids = params["ids"]
+                    if not isinstance(ids, list) or not ids or len(ids) != len(set(ids)):
+                        raise ValueError("Select each result once.")
+                    # Validate the complete selection before committing any changes.
+                    changed_jobs = [{**self.get_job(i), "project_id": project_id} for i in ids]
+                else:
+                    project = next((p for p in projects if p["id"] == params["id"]), None)
+                    if project is None:
+                        raise ValueError("Project not found.")
+                    if method == "rename_project":
+                        renamed = Project.model_validate({**project, "name": params["name"]})
+                        if any(
+                            p["id"] != project["id"] and p["name"].casefold() == renamed.name.casefold()
+                            for p in projects
+                        ):
+                            raise ValueError("A project with this name already exists.")
+                        project.update(renamed.model_dump())
+                    elif method == "archive_project":
+                        if not isinstance(params["archived"], bool):
+                            raise ValueError("Archived must be true or false.")
+                        project["archived"] = params["archived"]
+                    else:
+                        changed_jobs = [
+                            {**j, "project_id": None}
+                            for j in self.jobs if j.get("project_id") == project["id"]
+                        ]
+                        projects = [p for p in projects if p["id"] != project["id"]]
+                self.state.save_project_state(projects, changed_jobs)
+                for updated in changed_jobs:
+                    self.get_job(updated["id"]).update(updated)
+                self.emit("projects_updated", projects=projects)
+                # Grouping is metadata, not a new separation completion.
+                self.emit("history_updated")
+                return projects
         if method == "export_results":
             from .result_export import ResultExport, export_results
 
@@ -629,8 +694,15 @@ class Supervisor:
             return True
         if method == "clear_completed":
             with self.lock:
+                ids = params.get("ids")
+                if ids is not None:
+                    if not isinstance(ids, list) or len(ids) != len(set(ids)):
+                        raise ValueError("Select each history entry once.")
+                    for job_id in ids:
+                        if self.get_job(job_id)["status"] != "Completed":
+                            raise ValueError("Only completed history can be cleared.")
                 for job in list(self.jobs):
-                    if job["status"] == "Completed":
+                    if job["status"] == "Completed" and (ids is None or job["id"] in ids):
                         self.jobs.remove(job)
                         self.state.remove_job(job["id"])
             return True

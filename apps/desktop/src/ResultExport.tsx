@@ -35,6 +35,7 @@ export function ResultExport({
     (job.result?.outputs ?? []).map((output) => ({
       ...output,
       preset: job.request.preset.name,
+      recording: job.source.name,
     })),
   );
   const [selected, setSelected] = useState(
@@ -172,6 +173,24 @@ export function ResultExport({
               <legend>
                 Stems · {chosen.length} of {outputs.length} selected
               </legend>
+              <div className="actions export-selection">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    setSelected(new Set(outputs.map((o) => o.path)))
+                  }
+                >
+                  Select all stems
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setSelected(new Set())}
+                >
+                  Clear selection
+                </button>
+              </div>
               {outputs.map((output) => (
                 <label key={output.path} className="export-stem">
                   <input
@@ -190,7 +209,9 @@ export function ResultExport({
                   <span>
                     <strong>{output.stem}</strong>
                     <small>
-                      {jobs.length > 1 ? `${output.preset} · ` : ""}
+                      {jobs.length > 1
+                        ? `${output.recording} · ${output.preset} · `
+                        : ""}
                       {time(output.duration)} ·{" "}
                       {(output.sample_rate / 1000).toFixed(1)} kHz ·{" "}
                       {bytes(output.size)}

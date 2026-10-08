@@ -1,8 +1,10 @@
-# Separator 0.1.5
+# Separator 0.1.6
 
 Native audio separation for Windows x64, Linux x64 and Apple Silicon macOS 14+.
 
-This update improves the result workflow: direct Library actions, persistent non-destructive trim/level edits, selected-stem exports with format and destination choices, collision-safe filenames, and in-app playback of exported files. Separation quality and Ultra model defaults are unchanged.
+Organize generations into projects, archive finished work, and move results between projects without moving audio. Play any stem directly or listen to all stems together, then export individual stems or selected results to your chosen folder.
+
+The new Support view offers optional PayPal and Bitcoin/Ethereum/Solana donations and credits Elias Kanakidis (@Elias02345). Automatic signed-update checks show an in-app notification; installation remains manual, with download progress and checks for active processing/downloads. Separation quality, Ultra models, custom ensembles and original files are preserved.
 
 - Instrumental Ultra: Inst v1e+ and Becruily using upstream max-spec ensembling.
 - Vocal Ultra: Resurrection and Big Beta6x using upstream FFT averaging.

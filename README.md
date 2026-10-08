@@ -29,11 +29,25 @@ Linux packages are built on Ubuntu 22.04; older distributions are not verified. 
 - Import multiple files or folders; WAV, FLAC, MP3, M4A, OGG and other FFmpeg formats.
 - Fast, Balanced and Ultra recommendations, plus four-stem Demucs and custom presets.
 - Persistent queue, pause after current, reorder, cancel, retry and searchable history.
+- Projects with assignment, rename, archive/restore and batch export of selected results.
 - Model search/download/cancel/integrity checks and explicit cache management.
 - Lossless FLAC/WAV or MP3/OGG/M4A export; original or selected sample rate, ceiling, safe names and collision policy.
 - Synchronized original/stem listening, waveform seek, mute/solo, volume, zoom, loop and blind comparisons over matching ranges.
 - Local diagnostics, readiness tests, light/dark/system themes and reduced motion.
+- Automatic signed-release checks, in-app update notices and manual installation with download progress.
 
 Presets, settings, history and model weights live outside the installation directory. Clearing processing caches never deletes exported recordings. [Data and update contract](docs/UPDATE_RULES.md).
 
 For development and validation, see [BUILDING.md](BUILDING.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md). App source is MIT; [third-party notices](THIRD_PARTY_NOTICES.md) apply separately.
+
+## Contributors
+
+[Elias Kanakidis (@Elias02345)](https://github.com/Elias02345) — creator, maintainer and contributor.
+
+## Support development
+
+Enjoying Separator? [Buy Elias a coffee or donate with PayPal](https://www.paypal.com/paypalme/EliasK09). The app’s **Support** view also provides copyable crypto addresses. Donations are optional; all features remain available.
+
+- Bitcoin (BTC): `bc1qphk3h7sw6j429c62ypw6zxgmkfeevmxs437ze3`
+- Ethereum (ETH): `0x81deF905D66fd17433003e749f1e69bCFd95664d`
+- Solana (SOL): `G362aMnx7jSXp4iWtCwyw2yXy52ukRVoFgYCpw4aqrPQ`

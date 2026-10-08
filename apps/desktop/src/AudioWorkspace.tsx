@@ -463,36 +463,69 @@ function AudioWorkspacePlayer({
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [ready, single, validRange, draft.start, draft.end, loop]);
-  const toggle = useCallback(async () => {
-    const master = masterAudio(audio.current);
-    if (!master) return;
-    try {
-      if (!master.paused) {
+  const toggle = useCallback(
+    async (forcePlay = false) => {
+      const master = masterAudio(audio.current);
+      if (!master) return;
+      try {
+        if (!master.paused && !forcePlay) {
+          for (const a of audio.current.values()) a.pause();
+          setPlaying(false);
+        } else {
+          if (
+            single &&
+            validRange &&
+            (master.currentTime < draft.start ||
+              master.currentTime >= draft.end - 0.01)
+          ) {
+            for (const a of audio.current.values()) a.currentTime = draft.start;
+          }
+          await Promise.all([...audio.current.values()].map((a) => a.play()));
+          setPlaying(true);
+        }
+      } catch (e) {
         for (const a of audio.current.values()) a.pause();
         setPlaying(false);
-      } else {
-        if (
-          single &&
-          validRange &&
-          (master.currentTime < draft.start ||
-            master.currentTime >= draft.end - 0.01)
-        ) {
-          for (const a of audio.current.values()) a.currentTime = draft.start;
-        }
-        await Promise.all([...audio.current.values()].map((a) => a.play()));
-        setPlaying(true);
+        onError(e);
       }
-    } catch (e) {
-      for (const a of audio.current.values()) a.pause();
-      setPlaying(false);
-      onError(e);
+    },
+    [onError, single, validRange, draft.start, draft.end],
+  );
+  const playTrack = async (track: Track) => {
+    if (playing && selected === track.id && !mix && !muted.has(track.id)) {
+      await toggle();
+      return;
     }
-  }, [onError, single, validRange, draft.start, draft.end]);
+    setSelected(track.id);
+    setMix(false);
+    setMuted((previous) => {
+      const next = new Set(previous);
+      next.delete(track.id);
+      return next;
+    });
+    // Set audibility before starting playback, including a previously muted stem.
+    for (const [id, element] of audio.current)
+      configureMedia(element, id !== track.id, volume * (gains[id] ?? 1), loop);
+    await toggle(true);
+  };
+  const playAll = async () => {
+    setMix(true);
+    setMuted(new Set());
+    for (const [id, element] of audio.current)
+      configureMedia(
+        element,
+        id === "original",
+        volume * (gains[id] ?? 1),
+        loop,
+      );
+    await toggle(true);
+  };
   useEffect(() => {
     const shortcut = (e: KeyboardEvent) => {
       if (
         e.code === "Space" &&
         exportSelection === null &&
+        !document.querySelector("dialog[open]") &&
         !(
           e.target instanceof HTMLElement &&
           e.target.closest(
@@ -746,9 +779,32 @@ function AudioWorkspacePlayer({
             )}
             <div className="track-tools">
               <button
+                className="stem-play"
+                aria-label={`${playing && selected === track.id && !mix && !muted.has(track.id) ? "Pause" : "Play"} ${track.name}`}
+                disabled={!ready || unavailable.has(track.id)}
+                onClick={() => void playTrack(track)}
+              >
+                {playing &&
+                selected === track.id &&
+                !mix &&
+                !muted.has(track.id) ? (
+                  <Pause size={14} />
+                ) : (
+                  <Play size={14} />
+                )}
+                {playing &&
+                selected === track.id &&
+                !mix &&
+                !muted.has(track.id)
+                  ? "Pause"
+                  : "Play"}
+              </button>
+              <button
                 aria-label={`Mute ${track.name}`}
                 disabled={!ready || unavailable.has(track.id)}
                 className={muted.has(track.id) ? "active" : ""}
+                aria-pressed={muted.has(track.id)}
+                title={`Mute ${track.name}`}
                 onClick={() =>
                   setMuted((previous) => {
                     const next = new Set(previous);
@@ -764,9 +820,15 @@ function AudioWorkspacePlayer({
                 aria-label={`Solo ${track.name}`}
                 disabled={!ready || unavailable.has(track.id)}
                 aria-pressed={selected === track.id && !mix}
+                title={`Solo ${track.name}`}
                 onClick={() => {
                   setSelected(track.id);
                   setMix(false);
+                  setMuted((previous) => {
+                    const next = new Set(previous);
+                    next.delete(track.id);
+                    return next;
+                  });
                 }}
               >
                 S
@@ -802,6 +864,7 @@ function AudioWorkspacePlayer({
                   onClick={() => setExportSelection(track.path)}
                 >
                   <Download size={14} />
+                  Export
                 </button>
               )}
               <button
@@ -815,6 +878,15 @@ function AudioWorkspacePlayer({
         ))}
       </div>
       <div className="transport">
+        {single && (
+          <button
+            className="play-all-stems"
+            disabled={!ready}
+            onClick={() => void playAll()}
+          >
+            <Play size={15} /> Play all stems
+          </button>
+        )}
         <button
           aria-label="Return to start"
           onClick={() => seek(single ? draft.start : 0)}

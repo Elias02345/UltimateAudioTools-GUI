@@ -1,5 +1,4 @@
-import { check } from "@tauri-apps/plugin-updater";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -12,6 +11,7 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
+  Coffee,
   Download,
   FolderOpen,
   HardDrive,
@@ -41,7 +41,6 @@ import {
   importPreset,
   onEngineEvent,
   restartRuntime,
-  restartApplication,
   reveal,
   time,
   validate,
@@ -52,10 +51,20 @@ import type {
   Job,
   ModelInfo,
   Preset,
+  Project,
   Settings,
 } from "./api";
 import { AudioWorkspace } from "./AudioWorkspace";
 import { ResultExport } from "./ResultExport";
+import { Projects } from "./Projects";
+import { Support, CONTRIBUTOR } from "./Support";
+import {
+  UpdateBanner,
+  UpdateDialog,
+  UpdateSettings,
+  useAppUpdates,
+  usePendingOperations,
+} from "./Updates";
 import { Dialog, Empty, Spinner } from "./components";
 import {
   InferenceControls,
@@ -64,12 +73,21 @@ import {
 } from "./PresetEditor";
 
 type Screen =
-  "Home" | "Queue" | "Library" | "Compare" | "Models" | "Presets" | "Settings";
+  | "Home"
+  | "Queue"
+  | "Projects"
+  | "Library"
+  | "Compare"
+  | "Models"
+  | "Presets"
+  | "Settings"
+  | "Support";
 type Initial = {
   v: number;
   settings: Settings;
   jobs: Job[];
   presets: Preset[];
+  projects: Project[];
   running: boolean;
   runtime_install: RuntimeStatus;
 };
@@ -96,11 +114,13 @@ type Confirmation = {
 const navigation = [
   { label: "Home" as const, icon: Home },
   { label: "Queue" as const, icon: ListMusic },
+  { label: "Projects" as const, icon: FolderOpen },
   { label: "Library" as const, icon: Layers3 },
   { label: "Compare" as const, icon: SlidersHorizontal },
   { label: "Models" as const, icon: HardDrive },
   { label: "Presets" as const, icon: Sparkles },
   { label: "Settings" as const, icon: Settings2 },
+  { label: "Support" as const, icon: Coffee },
 ];
 
 export function App() {
@@ -115,6 +135,43 @@ export function App() {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectFilter, setProjectFilter] = useState(
+    () => localStorage.getItem("separator-project-filter") ?? "all",
+  );
+  const [destinationProject, setDestinationProject] = useState(
+    () => localStorage.getItem("separator-generation-project") ?? "",
+  );
+  const [selectedResultIds, setSelectedResults] = useState<Set<string>>(
+    new Set(),
+  );
+  const [moveProject, setMoveProject] = useState("");
+  const selectedResults = useMemo(() => {
+    const completedIds = new Set(
+      jobs.filter((j) => j.status === "Completed").map((j) => j.id),
+    );
+    return new Set([...selectedResultIds].filter((id) => completedIds.has(id)));
+  }, [selectedResultIds, jobs]);
+  const updateProjects = useCallback((next: Project[]) => {
+    setProjects(next);
+    setDestinationProject((current) =>
+      next.some((p) => p.id === current && !p.archived) ? current : "",
+    );
+    setMoveProject((current) =>
+      next.some((p) => p.id === current && !p.archived) ? current : "",
+    );
+    setProjectFilter((current) =>
+      ["all", "unfiled"].includes(current) || next.some((p) => p.id === current)
+        ? current
+        : "unfiled",
+    );
+  }, []);
+  useEffect(() => {
+    if (settings) {
+      localStorage.setItem("separator-project-filter", projectFilter);
+      localStorage.setItem("separator-generation-project", destinationProject);
+    }
+  }, [settings, projectFilter, destinationProject]);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [files, setFiles] = useState<AudioMetadata[]>([]);
   const [target, setTarget] = useState<Preset["task"]>("Instrumental");
@@ -133,6 +190,7 @@ export function App() {
   const [editor, setEditor] = useState<Preset | null>(null);
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [exportJob, setExportJob] = useState<Job | null>(null);
+  const [bulkExportJobs, setBulkExportJobs] = useState<Job[] | null>(null);
   const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
   const [query, setQuery] = useState("");
   const [historyQuery, setHistoryQuery] = useState("");
@@ -155,6 +213,11 @@ export function App() {
   const [licenses, setLicenses] = useState(false);
   const [listLimit, setListLimit] = useState(100);
   const allowClose = useRef(false);
+  const {
+    begin: beginOperation,
+    end: endOperation,
+    hasPendingWork,
+  } = usePendingOperations();
   const jobsRef = useRef(jobs);
   const backgroundRef = useRef({ runtime: false, models: [] as string[] });
   useEffect(() => {
@@ -177,6 +240,23 @@ export function App() {
     (message: string, error = false) => setToast({ message, error }),
     [],
   );
+  const updates = useAppUpdates({
+    enabled: Boolean(settings?.setup_complete && settings.check_updates),
+    canInstall:
+      busy === null &&
+      !running &&
+      !jobs.some(activeJob) &&
+      !["copying", "downloading", "installing", "testing"].includes(
+        runtimeInstall.phase,
+      ) &&
+      !Object.values(downloads).some(
+        (state) =>
+          !["completed", "cancelled", "failed", "error"].includes(state.kind),
+      ),
+    notify,
+    hasPendingWork,
+  });
+  const isUpdating = updates.isBusy;
   const onError = useCallback(
     (error: unknown) =>
       notify(String(error instanceof Error ? error.message : error), true),
@@ -184,16 +264,18 @@ export function App() {
   );
   const perform = useCallback(
     async (name: string, work: () => Promise<void>) => {
+      beginOperation();
       setBusy(name);
       try {
         await work();
       } catch (error) {
         onError(error);
       } finally {
+        endOperation();
         setBusy(null);
       }
     },
-    [onError],
+    [onError, beginOperation, endOperation],
   );
   const refreshJobs = useCallback(
     async () =>
@@ -232,6 +314,9 @@ export function App() {
       setDraftSettings(data.settings);
       setJobs(data.jobs.map((j) => validate<Job>("Job", j)));
       setPresets(data.presets.map((p) => validate<Preset>("Preset", p)));
+      updateProjects(
+        (data.projects ?? []).map((p) => validate<Project>("Project", p)),
+      );
       setRunning(data.running);
       setRuntimeInstall(data.runtime_install);
       setQuality(data.settings.default_quality);
@@ -245,7 +330,7 @@ export function App() {
     } finally {
       setStartup(false);
     }
-  }, [refreshModels]);
+  }, [refreshModels, updateProjects]);
   useEffect(() => {
     const task = window.setTimeout(() => {
       void initialize();
@@ -277,6 +362,14 @@ export function App() {
         } catch (error) {
           onError(error);
         }
+      } else if (event.event === "projects_updated") {
+        updateProjects(
+          (event.data.projects as Project[]).map((p) =>
+            validate<Project>("Project", p),
+          ),
+        );
+      } else if (event.event === "history_updated") {
+        void refreshJobs().catch(onError);
       } else if (event.event === "runtime_install") {
         setRuntimeInstall(event.data as RuntimeStatus);
       } else if (event.event === "runtime_recovery") {
@@ -305,7 +398,7 @@ export function App() {
       active = false;
       void unlisten.then((fn) => fn());
     };
-  }, [notify, onError, refreshModels]);
+  }, [notify, onError, refreshModels, refreshJobs, updateProjects]);
   useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(
@@ -349,6 +442,11 @@ export function App() {
   }, [addFiles]);
   useEffect(() => {
     const unlisten = getCurrentWindow().onCloseRequested((event) => {
+      if (isUpdating()) {
+        event.preventDefault();
+        notify("Please wait for application update installation to finish.");
+        return;
+      }
       const background = backgroundRef.current;
       if (
         allowClose.current ||
@@ -386,7 +484,7 @@ export function App() {
       void unlisten.then((fn) => fn());
       void drop.then((fn) => fn());
     };
-  }, [addFiles]);
+  }, [addFiles, notify, isUpdating]);
 
   const chosenPreset = (() => {
     if (custom) return custom;
@@ -416,6 +514,8 @@ export function App() {
       comparisonId?: string,
       downloadConsent = false,
     ) => {
+      if (isUpdating())
+        throw new Error("Wait for the application update to finish.");
       const requests = paths.map((file) => ({
         path: file.path,
         preset: selected,
@@ -428,12 +528,16 @@ export function App() {
             }
           : {}),
       }));
-      await api("enqueue", { requests, start: true });
+      await api("enqueue", {
+        requests,
+        start: true,
+        project_id: destinationProject || null,
+      });
       setRunning(true);
       await refreshJobs();
       setScreen("Queue");
     },
-    [rangeStart, rangeEnd, refreshJobs],
+    [rangeStart, rangeEnd, refreshJobs, destinationProject, isUpdating],
   );
   const start = useCallback(async () => {
     if (!chosenPreset || !files.length) return;
@@ -468,6 +572,7 @@ export function App() {
   }, [chosenPreset, files, settings?.auto_download, enqueue, perform]);
   useEffect(() => {
     const shortcut = (e: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       if (e.key.toLowerCase() === "o") {
         e.preventDefault();
@@ -492,6 +597,13 @@ export function App() {
   const completed = jobs.filter((j) => j.status === "Completed");
   const libraryJobs = [...completed]
     .reverse()
+    .filter(
+      (job) =>
+        projectFilter === "all" ||
+        (projectFilter === "unfiled"
+          ? !job.project_id
+          : job.project_id === projectFilter),
+    )
     .filter((job) =>
       `${job.source.name} ${job.request.preset.name} ${job.request.preset.models.join(" ")}`
         .toLowerCase()
@@ -499,12 +611,38 @@ export function App() {
     );
   const active = jobs.find(activeJob);
   const runAgain = (job: Job) => {
+    setDestinationProject(
+      projects.find((p) => p.id === job.project_id && !p.archived)?.id ?? "",
+    );
     setCustom(structuredClone(job.request.preset));
     setTarget(job.request.preset.task);
     setFiles([job.source]);
     setScreen("Home");
     setSelectedJob(null);
   };
+  const openProject = (id: string) => {
+    setProjectFilter(id);
+    setSelectedResults(new Set());
+    setHistoryQuery("");
+    setSelectedJob(null);
+    setListLimit(100);
+    setScreen("Library");
+    if (projects.some((p) => p.id === id && !p.archived))
+      setDestinationProject(id);
+  };
+  const currentProject = projects.find((p) => p.id === projectFilter);
+  const moveSelected = () =>
+    perform("move-results", async () => {
+      updateProjects(
+        await api<Project[]>("assign_jobs", {
+          ids: [...selectedResults],
+          project_id: moveProject || null,
+        }),
+      );
+      await refreshJobs();
+      setSelectedResults(new Set());
+      notify("Results moved. Audio files stay in their original locations.");
+    });
   const newPreset = () => {
     if (!chosenPreset) return;
     setEditor({
@@ -702,6 +840,15 @@ export function App() {
               </small>
             </div>
           </div>
+          <button
+            className="text-button support-link"
+            onClick={() => {
+              setScreen("Support");
+              setSelectedJob(null);
+            }}
+          >
+            <Coffee size={14} /> Buy Elias a coffee
+          </button>
           <p>
             <ShieldCheck size={13} />
             Audio stays on this computer
@@ -745,6 +892,7 @@ export function App() {
             </button>
           </div>
         </header>
+        <UpdateBanner updates={updates} />
         <div className="workspace">
           {!settings.setup_complete ? (
             <section className="setup">
@@ -839,6 +987,35 @@ export function App() {
                 screen === "Queue" ? "Back to Queue" : "Back to Library"
               }
             />
+          ) : screen === "Support" ? (
+            <Support notify={notify} onError={onError} />
+          ) : screen === "Projects" ? (
+            <Projects
+              projects={projects}
+              jobs={jobs}
+              onChange={updateProjects}
+              onOpen={openProject}
+              onError={onError}
+              onDelete={(project) =>
+                setConfirmation({
+                  title: `Remove ${project.name}?`,
+                  body: "The project grouping will be removed. Its generations become unfiled; audio files, edits and exports are preserved.",
+                  action: "Remove project",
+                  run: async () => {
+                    updateProjects(
+                      await api<Project[]>("delete_project", {
+                        id: project.id,
+                      }),
+                    );
+                    if (projectFilter === project.id)
+                      setProjectFilter("unfiled");
+                    if (destinationProject === project.id)
+                      setDestinationProject("");
+                    await refreshJobs();
+                  },
+                })
+              }
+            />
           ) : screen === "Home" ? (
             <>
               <div className="page-heading">
@@ -859,6 +1036,34 @@ export function App() {
                 >
                   <SlidersHorizontal size={16} />
                   {advanced ? "Simple mode" : "Studio mode"}
+                </button>
+              </div>
+              <div className="project-destination">
+                <label>
+                  Save generations to
+                  <select
+                    aria-label="New generation project"
+                    value={destinationProject}
+                    onChange={(e) => setDestinationProject(e.target.value)}
+                  >
+                    <option value="">Unfiled</option>
+                    {projects
+                      .filter((p) => !p.archived)
+                      .map((p) => (
+                        <option value={p.id} key={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setScreen("Projects");
+                    setSelectedJob(null);
+                  }}
+                >
+                  Manage projects
                 </button>
               </div>
               <div className="home-grid">
@@ -1137,7 +1342,10 @@ export function App() {
                   <h1>
                     {screen === "Queue"
                       ? "Your processing queue"
-                      : "Made from your music"}
+                      : (currentProject?.name ??
+                        (projectFilter === "unfiled"
+                          ? "Unfiled results"
+                          : "Made from your music"))}
                   </h1>
                   <p>
                     {screen === "Queue"
@@ -1189,33 +1397,145 @@ export function App() {
                   <button
                     onClick={() =>
                       setConfirmation({
-                        title: "Clear completed history?",
-                        body: "Completed results will disappear from Queue and Library. Audio files and exported copies stay on disk.",
+                        title:
+                          screen === "Library"
+                            ? "Clear visible history?"
+                            : "Clear completed history?",
+                        body: "Selected completed results will disappear from Queue and Library. Audio files and exported copies stay on disk.",
                         action: "Clear history",
                         run: async () => {
-                          await queueAction("clear_completed");
+                          await api(
+                            "clear_completed",
+                            screen === "Library"
+                              ? { ids: libraryJobs.map((j) => j.id) }
+                              : {},
+                          );
+                          await refreshJobs();
+                          setSelectedResults(new Set());
                         },
                       })
                     }
-                    disabled={!completed.length}
+                    disabled={
+                      screen === "Library"
+                        ? !libraryJobs.length
+                        : !completed.length
+                    }
                   >
-                    Clear completed history
+                    {screen === "Library"
+                      ? "Clear visible history"
+                      : "Clear completed history"}
                   </button>
                 </div>
               </div>
               {screen === "Library" && (
-                <label className="search">
-                  <Search size={17} />
-                  <input
-                    aria-label="Search history"
-                    placeholder="Find a recording, preset or model…"
-                    value={historyQuery}
-                    onChange={(event) => {
-                      setHistoryQuery(event.target.value);
-                      setListLimit(100);
-                    }}
-                  />
-                </label>
+                <>
+                  <div className="library-project-toolbar">
+                    <label>
+                      Project
+                      <select
+                        aria-label="Filter results by project"
+                        value={projectFilter}
+                        onChange={(e) => {
+                          setProjectFilter(e.target.value);
+                          setSelectedResults(new Set());
+                          setListLimit(100);
+                        }}
+                      >
+                        <option value="all">All results</option>
+                        <option value="unfiled">Unfiled</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                            {p.archived ? " (archived)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      onClick={() => {
+                        setScreen("Projects");
+                        setSelectedJob(null);
+                      }}
+                    >
+                      Browse projects
+                    </button>
+                  </div>
+                  <label className="search">
+                    <Search size={17} />
+                    <input
+                      aria-label="Search history"
+                      placeholder="Find a recording, preset or model…"
+                      value={historyQuery}
+                      onChange={(event) => {
+                        setHistoryQuery(event.target.value);
+                        setListLimit(100);
+                      }}
+                    />
+                  </label>
+                  {libraryJobs.length > 0 && (
+                    <div className="library-selection">
+                      <label className="check-label">
+                        <input
+                          type="checkbox"
+                          aria-label="Select visible results"
+                          checked={libraryJobs
+                            .slice(0, listLimit)
+                            .every((j) => selectedResults.has(j.id))}
+                          onChange={(e) =>
+                            setSelectedResults(
+                              e.target.checked
+                                ? new Set(
+                                    libraryJobs
+                                      .slice(0, listLimit)
+                                      .map((j) => j.id),
+                                  )
+                                : new Set(),
+                            )
+                          }
+                        />
+                        Select visible
+                      </label>
+                      <span>{selectedResults.size} selected</span>
+                      <label>
+                        Move to
+                        <select
+                          aria-label="Move selected results to project"
+                          value={moveProject}
+                          onChange={(e) => setMoveProject(e.target.value)}
+                        >
+                          <option value="">Unfiled</option>
+                          {projects
+                            .filter((p) => !p.archived)
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <button
+                        disabled={!selectedResults.size || busy !== null}
+                        onClick={() => void moveSelected()}
+                      >
+                        Move selected
+                      </button>
+                      <button
+                        disabled={!selectedResults.size}
+                        onClick={() =>
+                          setBulkExportJobs(
+                            jobs.filter(
+                              (j) =>
+                                selectedResults.has(j.id) &&
+                                j.status === "Completed",
+                            ),
+                          )
+                        }
+                      >
+                        Export selected results
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
               {(screen === "Library" ? libraryJobs : jobs).length ? (
                 <div className="job-list">
@@ -1227,6 +1547,21 @@ export function App() {
                         data-job-id={job.id}
                         className={`job-row ${activeJob(job) ? "processing" : ""}`}
                       >
+                        {screen === "Library" && (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${job.source.name}`}
+                            checked={selectedResults.has(job.id)}
+                            onChange={(e) =>
+                              setSelectedResults((previous) => {
+                                const next = new Set(previous);
+                                if (e.target.checked) next.add(job.id);
+                                else next.delete(job.id);
+                                return next;
+                              })
+                            }
+                          />
+                        )}
                         <span className="file-icon">
                           {job.status === "Completed" ? (
                             <CheckCircle2 size={19} />
@@ -1245,6 +1580,12 @@ export function App() {
                               job.created_at * 1000,
                             ).toLocaleDateString()}
                           </small>
+                          {job.project_id && (
+                            <small className="project-tag">
+                              {projects.find((p) => p.id === job.project_id)
+                                ?.name ?? "Project"}
+                            </small>
+                          )}
                           {job.status === "Completed" && (
                             <small className="result-files">
                               {job.result?.outputs
@@ -1992,7 +2333,7 @@ export function App() {
                 </button>
                 <span className="muted">
                   {settingsChanged
-                    ? "Changes apply to new jobs after saving."
+                    ? "Apply your changes to save these settings."
                     : "All changes saved."}
                 </span>
               </div>
@@ -2208,8 +2549,24 @@ export function App() {
                   </label>
                 </div>
               </section>
+              <UpdateSettings
+                updates={updates}
+                enabled={editedSettings.check_updates}
+                onToggle={(check_updates) =>
+                  showSettings({ ...editedSettings, check_updates })
+                }
+              />
               <section className="settings-section">
                 <h2>Diagnostics & About</h2>
+                <p>
+                  Created and maintained by Elias Kanakidis.{" "}
+                  <button
+                    className="text-button"
+                    onClick={() => void openUrl(CONTRIBUTOR).catch(onError)}
+                  >
+                    Contributor: @Elias02345
+                  </button>
+                </p>
                 <p>
                   {BRAND.name} {BRAND.version} · Audio stays on this computer.
                   No telemetry.
@@ -2244,36 +2601,6 @@ export function App() {
                     }
                   >
                     Run self-test
-                  </button>
-                  <button
-                    disabled={runtimeBusy || jobs.some(activeJob)}
-                    onClick={() =>
-                      void perform("updates", async () => {
-                        const update = await check({ timeout: 20000 });
-                        if (!update) {
-                          notify("You have the latest published version.");
-                          return;
-                        }
-                        setConfirmation({
-                          title: `Update to ${update.version}?`,
-                          body:
-                            update.body ??
-                            "Install the signed application update. Models, presets and recordings are preserved.",
-                          action: "Install and restart",
-                          run: async () => {
-                            await update.downloadAndInstall((event) => {
-                              if (event.event === "Started")
-                                notify(
-                                  "Downloading verified application update…",
-                                );
-                            });
-                            await restartApplication();
-                          },
-                        });
-                      })
-                    }
-                  >
-                    Check for signed updates
                   </button>
                   <button onClick={() => setLicenses(true)}>
                     Open Source & Model Licenses
@@ -2310,6 +2637,7 @@ export function App() {
           ) : null}
         </div>
       </main>
+      <UpdateDialog updates={updates} />
       {toast && (
         <div
           className={`toast ${toast.error ? "error" : ""}`}
@@ -2364,8 +2692,14 @@ export function App() {
           />
         </Dialog>
       )}
-      {exportJob && (
-        <ResultExport jobs={[exportJob]} onClose={() => setExportJob(null)} />
+      {(exportJob || bulkExportJobs) && (
+        <ResultExport
+          jobs={bulkExportJobs ?? [exportJob!]}
+          onClose={() => {
+            setExportJob(null);
+            setBulkExportJobs(null);
+          }}
+        />
       )}
       {modelDetail && (
         <Dialog title={modelDetail.name} onClose={() => setModelDetail(null)}>

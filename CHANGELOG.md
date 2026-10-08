@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.6 — Projects, support and updates
+
+- Create, rename, archive and restore projects; assign new generations and move existing results without moving or deleting audio.
+- Remember the current project, select multiple results for batch export, and scope Library history cleanup to its visible results.
+- Play individual stems directly, unmute on explicit Play, switch without losing the transport position, and play all stems together.
+- Make individual stem export visible and add select-all/clear controls to export dialogs.
+- Add optional PayPal and Bitcoin/Ethereum/Solana donations using the creator’s supplied addresses.
+- Credit Elias Kanakidis (@Elias02345) as creator, maintainer and contributor in the app and repository.
+- Check signed releases automatically on startup/hourly, show a persistent in-app update notice, and display download progress with manual installation and recoverable errors.
+- Recheck processing/download safety before update installation and release native updater resources after checks or failures.
+- Preserve separation quality, Ultra models, custom ensembles and original audio files.
+
 ## 0.1.5 — Results, editing and export
 
 - Open completed results and their output folders directly from Library, with stem and format details and a local return action.
