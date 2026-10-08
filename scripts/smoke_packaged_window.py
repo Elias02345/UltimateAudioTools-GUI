@@ -271,7 +271,7 @@ def smoke(application: Path, report: Path):
                             ".catch(()=>{}); return true;"
                         )
                         time.sleep(0.3)
-                    except RuntimeError:
+                    except (OSError, RuntimeError):
                         pass
                 if session:
                     try:
