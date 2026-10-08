@@ -25,6 +25,8 @@ Choose `windows`/`macos` and `nsis`/`app,dmg` on their native build machines. FF
 
 Set `TAURI_SIGNING_PRIVATE_KEY` and its optional password for signed updater artifacts. Local/fork builds without this key produce installers without update artifacts; tagged publication requires the key. OS signing/notarization credentials belong in CI secrets; never commit them. Preserve signing keys for future releases.
 
+The Desktop packages workflow runs on signed release tags or manual workflow dispatch. Normal development branches run the cross-platform code checks; dispatch the package workflow when an installer change needs native package verification before release.
+
 ## Checks
 
 Windows packaging also requires a licensed Visual Studio 2022 Enterprise or Professional installation containing its x64 C++ redistributables. The builder copies one complete unmodified CRT set beside private Python, preserves Microsoft's original license documents and records DLL hashes/product versions. Both staging and installed-package probes assert that Torch loads those private DLLs, so the runner's system-wide runtime cannot mask an incomplete installer.

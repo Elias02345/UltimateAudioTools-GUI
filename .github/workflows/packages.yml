@@ -3,7 +3,6 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
-    branches: ['feature/desktop-runtime']
 concurrency:
   group: packages-${{ github.ref }}
   cancel-in-progress: true

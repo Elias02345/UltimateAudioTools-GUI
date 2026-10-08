@@ -10,9 +10,11 @@ Actual native-window tests passed first-run setup, native drag/drop event import
 
 Current automated local checks: 37 Python tests, 8 frontend contract tests, 2 Rust tests; lint/typecheck/build/clippy passed. Real Torch and ONNX CUDA operations passed. A private CUDA installation transaction, real container CPU inference/cancellation, native range comparison, moved-source playback recovery and minimum-window library search have also passed. A fresh production AppImage also passed private-runtime readiness, production CSP, real native preview playback and minimum-window checks. Test reports/screenshots are in the development-only `.test-output` folder.
 
-## In progress
+## Release verification
 
-Final cross-platform package validation and publication of cryptographically verified updater/release artifacts. Actual installer testing exposed and corrected production CSP evaluation, Linux TBB dependency, incomplete local media plugins and Apple Vorbis linker issues. The production media test now exercises playback. A transient Ubuntu CI package-mirror timeout is handled by a bounded retry helper. Do not interpret an in-progress CI run as a pass.
+All three [native package jobs](https://github.com/Elias02345/UltimateAudioTools-GUI/actions/runs/37708177809) and the [complete code checks](https://github.com/Elias02345/UltimateAudioTools-GUI/actions/runs/37708177569) passed. The Linux CI test plays an actual preview in a fresh production window. Windows readiness cleanup now closes its SQLite database explicitly, and installer/uninstaller checks leave no private runtime installed on the runner.
+
+An independent release preparation using real CI artifacts verified all four updater signatures and their signed versions, the separate Debian/AppImage feed entries, and exact installer/source selection. Tagged publication repeats validation and refuses publication when any platform, signature or version check fails. Package builds run on release tags or explicit workflow dispatch. Actual installer testing corrected production CSP evaluation, Linux TBB/media dependencies and Apple Vorbis linking; bounded retries handle transient Ubuntu mirror failures.
 
 ## Platform evidence
 

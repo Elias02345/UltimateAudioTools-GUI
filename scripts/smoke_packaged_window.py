@@ -6,6 +6,7 @@ import json
 import math
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import tempfile
@@ -55,6 +56,7 @@ def smoke(application: Path, report: Path):
                 env=env,
                 stdout=log,
                 stderr=subprocess.STDOUT,
+                start_new_session=True,
             )
             try:
                 deadline = time.monotonic() + 20
@@ -180,7 +182,12 @@ def smoke(application: Path, report: Path):
                         ).close()
                     except OSError:
                         pass
-                proc.terminate()
+                # AppImage wrappers can leave GTK children behind after a failed session.
+                # This new process group contains only the driver and its test application.
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
                 try:
                     proc.wait(timeout=15)
                 except subprocess.TimeoutExpired:
