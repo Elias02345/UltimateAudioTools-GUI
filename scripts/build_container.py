@@ -29,9 +29,15 @@ subprocess.run(
 )
 context_root = ROOT / ".test-state"
 context_root.mkdir(exist_ok=True)
+subprocess.run([str(args.runtime / "bin/python3"), str(ROOT / "scripts/fetch_ffmpeg_sources.py")], check=True)
 with tempfile.TemporaryDirectory(prefix="container-context-", dir=context_root) as temp:
     context = Path(temp)
     shutil.copyfile(ROOT / "container/Dockerfile", context / "Dockerfile")
+    shutil.copyfile(ROOT / "runtime/ffmpeg-sources.json", context / "ffmpeg-sources.json")
+    shutil.copytree(ROOT / "runtime/ffmpeg-sources", context / "codec-sources")
+    (context / "codec-scripts").mkdir()
+    for name in ["build_ffmpeg.sh", "fetch_ffmpeg_sources.py", "install_ffmpeg.py"]:
+        shutil.copyfile(ROOT / "scripts" / name, context / "codec-scripts" / name)
     # Hard links avoid duplicating gigabytes. Docker receives only the intended source trees.
     shutil.copytree(
         args.runtime,

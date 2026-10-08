@@ -234,6 +234,22 @@ def test_offline_catalog_and_empty_checkpoint(tmp_path, monkeypatch):
     assert not next(m for m in catalog.list() if m["id"] == model["id"])["downloaded"]
 
 
+def test_both_target_requires_vocals_and_instrumental_before_inference(tmp_path, monkeypatch):
+    catalog = Catalog(tmp_path / "models", tmp_path)
+    monkeypatch.setattr(
+        catalog,
+        "list",
+        lambda: [
+            {"id": "roformer.ckpt", "stems": ["Vocals", "Instrumental"]},
+            {"id": "demucs.yaml", "stems": ["Vocals", "Drums", "Bass", "Other"]},
+        ],
+    )
+    catalog.validate_selection(Preset(id="valid", name="Both", models=["roformer.ckpt"], task="Both"))
+    with pytest.raises(ValueError, match="does not supply"):
+        catalog.validate_selection(Preset(id="invalid", name="Both", models=["demucs.yaml"], task="Both"))
+    catalog.validate_selection(Preset(id="all", name="All", models=["demucs.yaml"], task="All"))
+
+
 def test_comparison_preview_uses_same_range_and_cache_key(tmp_path):
     import numpy as np
     import soundfile as sf

@@ -7,5 +7,7 @@
 - Private CPU/MPS runtime, transactional NVIDIA acceleration installation, verified model downloads and real CUDA execution.
 - Float intermediates, contextual chunking, lossless exports and original sample-rate preservation.
 - Native playback with streamed previews, waveform seek, mute/solo, loop and blind range comparisons.
+- Surviving stems remain playable when source audio has moved; individual model selection clears ensemble weights and keeps the selected target consistent.
 - Reproducible multi-platform packaging and source/runtime validation in GitHub Actions.
+- Precompiled IPC validators preserve production CSP; Linux packages also launch a real native window in CI.
 - Isolated optional container processing, explicit comparison cleanup, and source-built FFmpeg with complete corresponding codec sources and bundled license notices.

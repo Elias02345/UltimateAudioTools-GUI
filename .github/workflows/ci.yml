@@ -23,6 +23,7 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+      - run: git diff --exit-code packages/shared
   engine:
     strategy:
       fail-fast: false

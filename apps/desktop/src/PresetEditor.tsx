@@ -353,7 +353,7 @@ export function OutputControls({
           }
         >
           <option value="unique">Create unique filename</option>
-          <option value="ask">Stop and ask me to choose</option>
+          <option value="ask">Stop if an output exists</option>
           <option value="overwrite">Overwrite existing outputs</option>
         </select>
       </label>

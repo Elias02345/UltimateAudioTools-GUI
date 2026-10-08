@@ -1,6 +1,10 @@
 """Exercise real Torch and ONNX operations in a staged/relocated private runtime."""
 
 import argparse
+import ctypes
+import os
+import sys
+from pathlib import Path
 
 import numpy as np
 import onnx
@@ -11,6 +15,21 @@ import torchvision
 parser = argparse.ArgumentParser()
 parser.add_argument("--cuda", action="store_true")
 args = parser.parse_args()
+if os.name == "nt":
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+    kernel.GetModuleHandleW.restype = ctypes.c_void_p
+    kernel.GetModuleFileNameW.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_wchar), ctypes.c_uint32]
+    kernel.GetModuleFileNameW.restype = ctypes.c_uint32
+    for name in ["msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"]:
+        handle = kernel.GetModuleHandleW(name)
+        assert handle, f"C++ runtime module was not loaded: {name}"
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = kernel.GetModuleFileNameW(handle, buffer, len(buffer))
+        assert 0 < length < len(buffer), f"Cannot inspect the loaded C++ runtime: {name}"
+        assert Path(buffer.value).resolve().parent == Path(sys.prefix).resolve(), (
+            f"C++ runtime escaped the private application directory: {buffer.value}"
+        )
 assert torchvision.ops.nms(torch.tensor([[0.0, 0.0, 1.0, 1.0]]), torch.ones(1), 0.5).numel() == 1
 if args.cuda:
     assert torch.cuda.is_available(), "CUDA unavailable: NVIDIA driver R580 or newer required"

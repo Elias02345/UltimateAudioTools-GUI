@@ -13,6 +13,9 @@ import type { Job } from "./api";
 
 type Track = { id: string; name: string; path: string; color: string };
 type Peaks = { peaks: number[]; duration: number };
+function masterAudio(elements: Map<string, HTMLAudioElement>) {
+  return elements.get("original") ?? elements.values().next().value;
+}
 function configureMedia(
   element: HTMLAudioElement,
   muted: boolean,
@@ -166,7 +169,21 @@ export function Waveform({
   );
 }
 
-export function AudioWorkspace({
+export function AudioWorkspace(
+  props: Parameters<typeof AudioWorkspacePlayer>[0],
+) {
+  const key = JSON.stringify(
+    props.jobs.map((job) => [
+      job.source.path,
+      job.result?.outputs.map((output) => output.path),
+      job.request.range_start,
+      job.request.range_end,
+    ]),
+  );
+  return <AudioWorkspacePlayer key={key} {...props} />;
+}
+
+function AudioWorkspacePlayer({
   jobs,
   blind = false,
   onReveal,
@@ -218,11 +235,13 @@ export function AudioWorkspace({
   const [gains, setGains] = useState<Record<string, number>>({});
   const [mix, setMix] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
   useEffect(() => {
     let alive = true;
     const created = new Map<string, HTMLAudioElement>();
+    const failed = new Set<string>();
     const paths: Record<string, string> = {};
-    Promise.all(
+    Promise.allSettled(
       tracks.map(async (track) => {
         const path = await api<string>("preview", {
           path: track.path,
@@ -234,30 +253,64 @@ export function AudioWorkspace({
             : {}),
         });
         if (!alive) return;
-        const element = new Audio(await mediaUrl(path));
+        const url = await mediaUrl(path);
+        if (!alive) return;
+        const element = new Audio(url);
         element.preload = "metadata";
         element.muted = true;
         element.addEventListener("error", () => {
-          if (alive)
-            setLoadError(
-              "Audio playback could not load. Reveal the output to check that it still exists.",
-            );
+          if (!alive) return;
+          element.pause();
+          failed.add(track.id);
+          created.delete(track.id);
+          audio.current.delete(track.id);
+          setUnavailable((previous) => new Set([...previous, track.id]));
+          setSelected((current) =>
+            current === track.id
+              ? (created.keys().next().value ?? "original")
+              : current,
+          );
+          setReady(created.size > 0);
+          if (!created.size) setPlaying(false);
+          setLoadError(
+            `Audio for ${track.name} could not load. Available tracks can still be played; check the missing file or run the readiness tests in Setup.`,
+          );
         });
         element.addEventListener("loadedmetadata", () => {
-          if (alive && track.id === "original") setDuration(element.duration);
+          if (alive && masterAudio(audio.current) === element)
+            setDuration(element.duration);
         });
         element.addEventListener("ended", () => {
-          if (alive && track.id === "original") setPlaying(false);
+          if (alive && masterAudio(audio.current) === element)
+            setPlaying(false);
         });
         created.set(track.id, element);
         paths[track.id] = path;
       }),
     )
-      .then(() => {
+      .then((results) => {
         if (alive) {
           audio.current = created;
           setPreviewPaths(paths);
-          setReady(true);
+          const missing = tracks.filter(
+            (track, index) =>
+              results[index].status === "rejected" || failed.has(track.id),
+          );
+          setUnavailable(new Set(missing.map((track) => track.id)));
+          setReady(created.size > 0);
+          const first = tracks.find((track) => created.has(track.id));
+          setSelected((current) =>
+            created.has(current) ? current : (first?.id ?? "original"),
+          );
+          const master = masterAudio(created);
+          if (master && Number.isFinite(master.duration))
+            setDuration(master.duration);
+          if (missing.length)
+            setLoadError(
+              created.size
+                ? `${missing.map((track) => track.name).join(", ")} unavailable. Files may have moved or been removed. Available tracks can still be played.`
+                : "Audio files are unavailable. Restore them at their original locations and reopen this result.",
+            );
         }
       })
       .catch((e) => {
@@ -292,7 +345,7 @@ export function AudioWorkspace({
     if (!ready) return;
     let frame = 0;
     const tick = () => {
-      const master = audio.current.get("original");
+      const master = masterAudio(audio.current);
       if (master) {
         setPosition(master.currentTime);
         if (!master.paused && !master.seeking) {
@@ -312,7 +365,7 @@ export function AudioWorkspace({
     return () => cancelAnimationFrame(frame);
   }, [ready]);
   const toggle = useCallback(async () => {
-    const master = audio.current.get("original");
+    const master = masterAudio(audio.current);
     if (!master) return;
     try {
       if (!master.paused) {
@@ -401,6 +454,7 @@ export function AudioWorkspace({
           >
             <button
               className="track-select"
+              disabled={!ready || unavailable.has(track.id)}
               onClick={() => {
                 setSelected(track.id);
                 setMix(false);
@@ -409,19 +463,26 @@ export function AudioWorkspace({
             >
               <span className="track-dot" style={{ background: track.color }} />
               <span>{track.name}</span>
-              <small>{time(duration)}</small>
+              <small>
+                {unavailable.has(track.id) ? "Unavailable" : time(duration)}
+              </small>
             </button>
-            <Waveform
-              path={previewPaths[track.id] ?? track.path}
-              position={position}
-              duration={duration}
-              onSeek={seek}
-              color={track.color}
-              zoom={zoom}
-            />
+            {unavailable.has(track.id) ? (
+              <span className="muted">File moved or removed</span>
+            ) : (
+              <Waveform
+                path={previewPaths[track.id] ?? track.path}
+                position={position}
+                duration={duration}
+                onSeek={seek}
+                color={track.color}
+                zoom={zoom}
+              />
+            )}
             <div className="track-tools">
               <button
                 aria-label={`Mute ${track.name}`}
+                disabled={!ready || unavailable.has(track.id)}
                 className={muted.has(track.id) ? "active" : ""}
                 onClick={() =>
                   setMuted((previous) => {
@@ -436,6 +497,7 @@ export function AudioWorkspace({
               </button>
               <button
                 aria-label={`Solo ${track.name}`}
+                disabled={!ready || unavailable.has(track.id)}
                 aria-pressed={selected === track.id && !mix}
                 onClick={() => {
                   setSelected(track.id);
@@ -446,6 +508,7 @@ export function AudioWorkspace({
               </button>
               <input
                 aria-label={`${track.name} gain`}
+                disabled={!ready || unavailable.has(track.id)}
                 type="range"
                 min="0"
                 max="1"

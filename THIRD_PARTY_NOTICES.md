@@ -17,6 +17,7 @@ Separator application source is MIT, copyright Elias Kanakidis. Dependency licen
 | libogg 1.3.6 / libvorbis 1.3.7 | BSD-style licenses; https://xiph.org/downloads/ |
 | GStreamer | LGPL component licenses, https://gstreamer.freedesktop.org/ |
 | NVIDIA CUDA redistributables | NVIDIA component license terms bundled with the vendor wheels; https://docs.nvidia.com/cuda/eula/ |
+| Microsoft Visual C++ runtime (Windows) | Unmodified licensed Visual Studio x64 redistributables, with original Microsoft license documents; https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution |
 
 The private runtime contains `python/third-party-licenses/index.json` and the original notices from installed Python distributions. `python/third-party-licenses/FFmpeg` contains full codec licenses, the actual binary hash/build configuration, and every exact original source archive with the build script in `corresponding-source.tar.gz`. The same source archive accompanies each platform release. The upstream imageio-ffmpeg vendor executable is removed before packaging. Preserve all included notices and corresponding sources when redistributing packages. This table highlights major components rather than replacing their full texts.
 

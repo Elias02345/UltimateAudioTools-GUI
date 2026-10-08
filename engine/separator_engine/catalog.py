@@ -163,8 +163,14 @@ class Catalog:
                 raise ValueError("Ensembles require known stem metadata for every model.")
             if any(s != stems[0] for s in stems[1:]):
                 raise ValueError("Ensemble models must produce the same stem set.")
-        if preset.task not in {"Both", "All"}:
-            wanted = {"Vocals", "Drums", "Bass", "Other"} if preset.task == "4 Stems" else {preset.task}
+        if preset.task != "All":
+            wanted = (
+                {"Vocals", "Drums", "Bass", "Other"}
+                if preset.task == "4 Stems"
+                else {"Vocals", "Instrumental"}
+                if preset.task == "Both"
+                else {preset.task}
+            )
             if not wanted.issubset(set(entries[preset.models[0]]["stems"])):
                 raise ValueError("The selected model does not supply the requested stem.")
 

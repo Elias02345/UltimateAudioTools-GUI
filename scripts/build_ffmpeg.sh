@@ -27,7 +27,13 @@ for component in libogg-1.3.6 lame-3.100 libvorbis-1.3.7; do
   args=("--prefix=${FF_PREFIX}" --disable-shared --enable-static)
   case "${FF_PLATFORM}" in MINGW*|MSYS*) args+=(--host=x86_64-w64-mingw32);; esac
   if [[ "${component}" == lame-* ]]; then args+=(--disable-decoder --disable-frontend); fi
-  "${FF_BUILD_DIR}/src/${component}/configure" "${args[@]}" > configure.log 2>&1
+  component_config="${FF_BUILD_DIR}/src/${component}/configure"
+  if [[ "${FF_PLATFORM}" == Darwin && "${component}" == libvorbis-* ]]; then
+    # Vorbis 1.3.7 adds an obsolete PowerPC flag rejected by current Apple linkers.
+    sed 's/ -force_cpusubtype_ALL//g' "${component_config}" > "${component_config}-separator"
+    component_config="${component_config}-separator"
+  fi
+  bash "${component_config}" "${args[@]}" > configure.log 2>&1
   make -j "${FF_JOBS}" > build.log 2>&1
   make install > install.log 2>&1
 done

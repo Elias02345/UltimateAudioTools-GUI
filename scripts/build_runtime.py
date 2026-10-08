@@ -52,6 +52,10 @@ def build(target: str):
     from install_ffmpeg import install
 
     install(staging / "python", target)
+    if target == "windows":
+        from install_windows_crt import install as install_crt
+
+        install_crt(staging / "python")
     subprocess.run(
         [
             "uv",
@@ -83,6 +87,9 @@ def build(target: str):
         "checks=s.self_test(); print(checks); assert all(c['passed'] for c in checks); s.close()"
     )
     subprocess.run([str(python), "-c", probe], check=True, env=env)
+    subprocess.run(
+        [str(python), "-I", str(ROOT / "engine/separator_engine/runtime_probe.py")], check=True, env=env
+    )
     subprocess.run(
         [str(python), "-I", str(ROOT / "engine/separator_engine/license_inventory.py")], check=True, env=env
     )

@@ -274,11 +274,13 @@ class Supervisor:
                         job.update(status="Completed", result=result, completed_at=time.time(), download=None)
                         self.notify_job(job)
             except Exception as error:
-                logging.exception("Job failed: %s", job["id"])
                 with self.lock:
                     if job["status"] != "Cancelled":
+                        logging.exception("Job failed: %s", job["id"])
                         job.update(status="Failed", error=str(error)[:1800], completed_at=time.time())
                         self.notify_job(job)
+                    else:
+                        logging.info("Cancelled job worker stopped: %s", job["id"])
                 if self.worker is not None and self.worker.poll() is not None:
                     self.worker = None
             finally:

@@ -4,7 +4,9 @@ import argparse
 import hashlib
 import json
 import subprocess
+import tarfile
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +16,23 @@ parser.add_argument("--target", choices=["linux", "windows", "macos"], required=
 args = parser.parse_args()
 
 
+def extract_deb(archive: Path, destination: str):
+    with archive.open("rb") as stream:
+        assert stream.read(8) == b"!<arch>\n", "Invalid Debian archive"
+        while header := stream.read(60):
+            assert len(header) == 60 and header[-2:] == b"`\n", "Invalid archive member"
+            size = int(header[48:58])
+            name = header[:16].decode().strip().rstrip("/")
+            if name.startswith("data.tar."):
+                with tarfile.open(fileobj=stream, mode="r|*") as payload:
+                    payload.extractall(destination, filter="data")
+                return
+            stream.seek(size + size % 2, 1)
+    raise ValueError("Missing Debian data payload")
+
+
 def audit_runtime(python: Path, resources: Path):
+    assert (resources / "dependency-notices/index.json").is_file(), "Missing desktop license notices"
     subprocess.run(
         [str(python), "-I", str(resources / "engine/separator_engine/runtime_probe.py")], check=True
     )
@@ -24,6 +42,16 @@ def audit_runtime(python: Path, resources: Path):
     assert (notices / "index.json").is_file(), "Missing complete Python license inventory"
     assert (notices / "FFmpeg/corresponding-source.tar.gz").is_file(), "Missing exact FFmpeg sources"
     assert not list(runtime.rglob("imageio_ffmpeg/binaries/ffmpeg*")), "Unverified vendor FFmpeg shipped"
+    if args.target == "windows":
+        crt = notices / "MicrosoftVisualCRuntime"
+        manifest = json.loads((crt / "manifest.json").read_text(encoding="utf-8"))
+        assert {"msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"}.issubset(
+            entry["name"] for entry in manifest["files"]
+        ), "Incomplete private Windows C++ runtime"
+        for entry in manifest["files"]:
+            assert hashlib.sha256((runtime / entry["name"]).read_bytes()).hexdigest() == entry["sha256"]
+        for name, document in manifest["documents"].items():
+            assert hashlib.sha256((crt / name).read_bytes()).hexdigest() == document["sha256"]
     subprocess.run(
         [str(python), "-I", str(ROOT / "scripts/check_ffmpeg.py"), "--executable", str(executable)],
         check=True,
@@ -42,7 +70,7 @@ for artifact in artifacts:
 if args.target == "linux":
     deb = next(path for path in artifacts if path.suffix == ".deb")
     with tempfile.TemporaryDirectory(prefix="Separator package café ") as temp:
-        subprocess.run(["dpkg-deb", "-x", str(deb), temp], check=True)
+        extract_deb(deb, temp)
         roots = list(Path(temp).rglob("runtime/python/bin/python3"))
         assert len(roots) == 1, "The installer must contain exactly one private Python runtime"
         resources = roots[0].parents[3]
@@ -75,6 +103,13 @@ if args.target == "windows":
         resources = roots[0].parents[2]
         assert (resources / "engine/separator_engine/server.py").is_file()
         audit_runtime(roots[0], resources)
+        uninstallers = list(destination.glob("*uninstall*.exe"))
+        assert len(uninstallers) == 1, "Missing native uninstaller"
+        subprocess.run([str(uninstallers[0]), "/S"], check=True, timeout=240)
+        deadline = time.monotonic() + 30
+        while roots[0].exists() and time.monotonic() < deadline:
+            time.sleep(0.2)
+        assert not roots[0].exists(), "Uninstaller left the private runtime installed"
 files = [
     path
     for path in BUNDLE.rglob("*")

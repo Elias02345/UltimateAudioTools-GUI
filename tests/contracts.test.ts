@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { validate, bytes, time, activeJob } from '../apps/desktop/src/api';
 import type { Preset, Job } from '../apps/desktop/src/api';
 
@@ -12,4 +13,10 @@ describe('generated engine contract', () => {
   it('rejects unknown fields rather than silently ignoring imports', () => { expect(() => validate('Preset', { ...preset, shell_command: 'bad' })).toThrow(); });
   it('formats real metadata without invented sizes', () => { expect(bytes(null)).toBe('Size unknown'); expect(time(94)).toBe('1:34'); });
   it('distinguishes jobs that really consume resources', () => { expect(activeJob({ status: 'Processing' } as Job)).toBe(true); expect(activeJob({ status: 'Pending' } as Job)).toBe(false); expect(activeJob({ status: 'Interrupted' } as Job)).toBe(false); });
+  it('rejects unknown contract names', () => { expect(() => validate('MissingContract', preset)).toThrow('Unknown contract type'); });
+  it('counts unicode characters rather than UTF-16 halves', () => { expect(validate<Preset>('Preset', { ...preset, name: '🎵'.repeat(100) }).name).toHaveLength(200); expect(() => validate('Preset', { ...preset, name: '🎵'.repeat(101) })).toThrow(); });
+  it('loads the generated contract with dynamic evaluation forbidden', () => {
+    const result = execFileSync(process.execPath, ['--disallow-code-generation-from-strings', '--input-type=module', '-e', 'import { Preset } from "./packages/shared/validators.js"; if (Preset({})) throw new Error("Malformed preset accepted"); console.log("CSP contract passed");'], { encoding: 'utf8' });
+    expect(result.trim()).toBe('CSP contract passed');
+  });
 });

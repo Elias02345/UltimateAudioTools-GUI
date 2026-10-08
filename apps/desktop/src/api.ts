@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import Ajv from "ajv";
-import schema from "../../../packages/shared/schema.json";
+import type { ValidateFunction } from "ajv";
+import * as validators from "../../../packages/shared/validators.js";
 import type {
   AudioMetadata,
   Capabilities,
@@ -13,13 +13,12 @@ import type {
 
 export type { AudioMetadata, Capabilities, Job, ModelInfo, Preset, Settings };
 export const BRAND = { name: "Separator", version: "0.1.0" };
-const ajv = new Ajv({ strict: false, allErrors: true });
-const validateRoot = ajv.compile(schema);
-void validateRoot;
 export function validate<T>(name: string, value: unknown): T {
-  const check = ajv.getSchema(`#/$defs/${name}`);
+  const check = (validators as Record<string, ValidateFunction>)[name];
   if (!check || !check(value))
-    throw new Error(`Invalid ${name} data: ${ajv.errorsText(check?.errors)}`);
+    throw new Error(
+      `Invalid ${name} data: ${check?.errors?.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ") ?? "Unknown contract type"}`,
+    );
   return value as T;
 }
 export async function api<T>(

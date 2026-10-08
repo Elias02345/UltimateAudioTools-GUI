@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tauri dev --config apps/desktop/src-tauri/tauri.conf.json",
     "dev:ui": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/generate_types.mjs && tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:e2e": "node scripts/native_acceptance.mjs",

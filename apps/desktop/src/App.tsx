@@ -209,15 +209,19 @@ export function App() {
       ),
     [],
   );
-  const saveSettings = useCallback(async (next: Settings) => {
-    const saved = await api<Settings>("save_settings", { settings: next });
-    setSettings(validate<Settings>("Settings", saved));
-    setDraftSettings((current) =>
-      current && JSON.stringify(current) !== JSON.stringify(next)
-        ? current
-        : saved,
-    );
-  }, []);
+  const saveSettings = useCallback(
+    async (next: Settings) => {
+      const saved = await api<Settings>("save_settings", { settings: next });
+      setSettings(validate<Settings>("Settings", saved));
+      setDraftSettings((current) =>
+        current && JSON.stringify(current) !== JSON.stringify(next)
+          ? current
+          : saved,
+      );
+      await refreshModels();
+    },
+    [refreshModels],
+  );
   const initialize = useCallback(async () => {
     try {
       const data = await api<Initial>("initialize");
@@ -404,11 +408,16 @@ export function App() {
     };
   })();
   const enqueue = useCallback(
-    async (selected: Preset, paths: AudioMetadata[], comparisonId?: string) => {
+    async (
+      selected: Preset,
+      paths: AudioMetadata[],
+      comparisonId?: string,
+      downloadConsent = false,
+    ) => {
       const requests = paths.map((file) => ({
         path: file.path,
         preset: selected,
-        download_consent: true,
+        download_consent: downloadConsent,
         ...(comparisonId
           ? {
               comparison_id: comparisonId,
@@ -426,23 +435,35 @@ export function App() {
   );
   const start = useCallback(async () => {
     if (!chosenPreset || !files.length) return;
-    const missing = chosenPreset.models
-      .map((id) => models.find((m) => m.id === id))
-      .filter((m) => m && !m.downloaded) as ModelInfo[];
-    const work = async () => {
-      await enqueue(chosenPreset, files);
-      setFiles([]);
-    };
-    if (missing.length && !settings?.auto_download) {
-      const known = missing.every((m) => m.size != null);
-      setConfirmation({
-        title: "Download required models",
-        body: `${missing.length} model${missing.length === 1 ? "" : "s"} will download from upstream (${known ? bytes(missing.reduce((sum, m) => sum + (m.size ?? 0), 0)) : "total size not published"}). Individual weight licenses are listed in Models. Audio stays on this computer.`,
-        action: "Download & separate",
-        run: work,
+    await perform("separate", async () => {
+      const currentModels = (await api<ModelInfo[]>("list_models")).map((m) =>
+        validate<ModelInfo>("ModelInfo", m),
+      );
+      setModels(currentModels);
+      const selected = chosenPreset.models.map((id) => {
+        const model = currentModels.find((m) => m.id === id);
+        if (!model)
+          throw new Error(
+            `Model ${id} is no longer available. Choose another model in Models.`,
+          );
+        return model;
       });
-    } else await perform("separate", work);
-  }, [chosenPreset, files, models, settings?.auto_download, enqueue, perform]);
+      const missing = selected.filter((m) => !m.downloaded);
+      const work = async (consent: boolean) => {
+        await enqueue(chosenPreset, files, undefined, consent);
+        setFiles([]);
+      };
+      if (missing.length && !settings?.auto_download) {
+        const known = missing.every((m) => m.size != null);
+        setConfirmation({
+          title: "Download required models",
+          body: `${missing.length} model${missing.length === 1 ? "" : "s"} will download from upstream (${known ? bytes(missing.reduce((sum, m) => sum + (m.size ?? 0), 0)) : "total size not published"}). Individual weight licenses are listed in Models. Audio stays on this computer.`,
+          action: "Download & separate",
+          run: () => work(true),
+        });
+      } else await work(settings?.auto_download ?? false);
+    });
+  }, [chosenPreset, files, settings?.auto_download, enqueue, perform]);
   useEffect(() => {
     const shortcut = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -477,6 +498,7 @@ export function App() {
   const active = jobs.find(activeJob);
   const runAgain = (job: Job) => {
     setCustom(structuredClone(job.request.preset));
+    setTarget(job.request.preset.task);
     setFiles([job.source]);
     setScreen("Home");
     setSelectedJob(null);
@@ -938,8 +960,9 @@ export function App() {
                     data-testid="target"
                     value={target}
                     onChange={(e) => {
-                      setTarget(e.target.value as Preset["task"]);
-                      setCustom(null);
+                      const task = e.target.value as Preset["task"];
+                      setTarget(task);
+                      if (custom) setCustom({ ...custom, task });
                     }}
                   >
                     <option value="Instrumental">Instrumental</option>
@@ -949,6 +972,9 @@ export function App() {
                     <option value="Drums">Drums</option>
                     <option value="Bass">Bass</option>
                     <option value="Other">Other</option>
+                    {custom?.task === "All" && (
+                      <option value="All">All model stems</option>
+                    )}
                   </select>
                   <p className="option-description">
                     {target === "Instrumental"
@@ -1048,13 +1074,13 @@ export function App() {
                     Use preset
                     <select
                       value={custom?.id ?? chosenPreset.id}
-                      onChange={(e) =>
-                        setCustom(
-                          structuredClone(
-                            presets.find((p) => p.id === e.target.value)!,
-                          ),
-                        )
-                      }
+                      onChange={(e) => {
+                        const preset = presets.find(
+                          (p) => p.id === e.target.value,
+                        )!;
+                        setCustom(structuredClone(preset));
+                        setTarget(preset.task);
+                      }}
                     >
                       {presets.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -1501,17 +1527,22 @@ export function App() {
                             <button
                               onClick={() => {
                                 const base = chosenPreset ?? presets[0];
+                                const task = model.stems.includes(
+                                  "Instrumental",
+                                )
+                                  ? "Instrumental"
+                                  : model.stems.includes("Vocals")
+                                    ? "Vocals"
+                                    : "All";
                                 setCustom({
                                   ...structuredClone(base),
                                   models: [model.id],
                                   name: model.name,
-                                  task: model.stems.includes("Instrumental")
-                                    ? "Instrumental"
-                                    : model.stems.includes("Vocals")
-                                      ? "Vocals"
-                                      : "All",
+                                  task,
+                                  weights: null,
                                   quality: "Custom",
                                 });
+                                setTarget(task);
                                 setScreen("Home");
                                 setAdvanced(true);
                               }}
@@ -1837,7 +1868,7 @@ export function App() {
                               presets.find((p) => p.id === id)!,
                             );
                             p.output = structuredClone(settings.output);
-                            await enqueue(p, [files[0]], group);
+                            await enqueue(p, [files[0]], group, true);
                           }
                           setScreen("Compare");
                         },
