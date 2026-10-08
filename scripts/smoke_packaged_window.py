@@ -24,6 +24,29 @@ def port():
         return listener.getsockname()[1]
 
 
+def process_tree(pid):
+    """Capture only this test driver's children before shutting them down."""
+    processes = []
+    pending = [pid]
+    while pending:
+        current = pending.pop()
+        try:
+            proc = Path(f"/proc/{current}")
+            processes.append(
+                {
+                    "pid": current,
+                    "status": (proc / "status").read_text(),
+                    "command": (proc / "cmdline").read_bytes().replace(b"\0", b" ").decode(),
+                }
+            )
+            pending.extend(
+                int(child) for child in (proc / f"task/{current}/children").read_text().split()
+            )
+        except OSError:
+            processes.append({"pid": current, "exited": True})
+    return processes
+
+
 def smoke(application: Path, report: Path):
     driver = shutil.which("tauri-driver")
     native = shutil.which("WebKitWebDriver")
@@ -162,7 +185,30 @@ def smoke(application: Path, report: Path):
             except Exception:
                 log.flush()
                 log.seek(0)
-                print(log.read()[-6000:], flush=True)
+                diagnostics = report.with_suffix(".failure")
+                diagnostics.mkdir(parents=True, exist_ok=True)
+                driver_log = log.read()
+                (diagnostics / "driver.log").write_text(driver_log)
+                (diagnostics / "driver-status.json").write_text(
+                    json.dumps(
+                        {"pid": proc.pid, "exit_code": proc.poll(), "processes": process_tree(proc.pid)},
+                        indent=2,
+                    )
+                )
+                for directory in profile.rglob("logs"):
+                    if directory.is_dir():
+                        shutil.copytree(
+                            directory,
+                            diagnostics / directory.relative_to(profile),
+                            dirs_exist_ok=True,
+                        )
+                if window:
+                    try:
+                        window.screenshot(diagnostics / "window.png")
+                        (diagnostics / "window.txt").write_text(window.text())
+                    except (OSError, RuntimeError):
+                        pass
+                print(driver_log[-6000:], flush=True)
                 raise
             finally:
                 if window:

@@ -110,6 +110,13 @@ jobs:
           test -n "$PULSE_SERVER"
           app_version="$(python -c 'import json; print(json.load(open("apps/desktop/src-tauri/tauri.conf.json"))["version"])')"
           xvfb-run -a dbus-run-session -- python scripts/smoke_packaged_window.py --application "apps/desktop/src-tauri/target/release/bundle/appimage/Separator_${app_version}_amd64.AppImage"
+      - name: Preserve native failure diagnostics
+        if: failure() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-diagnostics-${{ github.sha }}
+          path: .test-output/package-window.failure/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: separator-${{ matrix.target }}-${{ github.sha }}

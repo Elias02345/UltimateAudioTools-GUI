@@ -5,6 +5,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 
 
@@ -31,17 +32,33 @@ class NativeWindow:
         return self.call("/execute/sync", {"script": script, "args": list(args)})
 
     def invoke(self, command, params):
-        return self.call(
-            "/execute/async",
-            {
-                "script": (
-                    "const done=arguments[arguments.length-1]; "
-                    "window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1])"
-                    ".then(x=>done({ok:x})).catch(e=>done({error:String(e)}));"
-                ),
-                "args": [command, params],
-            },
+        # WebKit's async WebDriver endpoint can reset the connection. Launch
+        # each IPC command once, then read its Promise result through sync JS.
+        # Retrying the invocation itself could duplicate a mutating command.
+        token = uuid.uuid4().hex
+        self.js(
+            "window.__webdriverReplies ??= Object.create(null);"
+            "const token=arguments[0];window.__webdriverReplies[token]={pending:true};"
+            "window.__TAURI_INTERNALS__.invoke(arguments[1],arguments[2])"
+            ".then(x=>window.__webdriverReplies[token]={ok:x})"
+            ".catch(e=>window.__webdriverReplies[token]={error:String(e)});return true;",
+            token,
+            command,
+            params,
         )
+        try:
+            deadline = time.monotonic() + 120
+            while time.monotonic() < deadline:
+                reply = self.js("return window.__webdriverReplies[arguments[0]];", token)
+                if reply is not None and not reply.get("pending"):
+                    return reply
+                time.sleep(0.1)
+            raise TimeoutError(f"Native IPC command timed out: {command}")
+        finally:
+            try:
+                self.js("delete window.__webdriverReplies[arguments[0]];return true;", token)
+            except (OSError, RuntimeError):
+                pass
 
     def click(self, text):
         self.js(

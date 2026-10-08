@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.1.1 — Verified first release
+## 0.1.2 — Verified first release
+
+- Invoke native test IPC exactly once through a synchronous Promise bridge, avoiding the failing WebKit asynchronous WebDriver endpoint.
+- Preserve native window, process and application diagnostics when a package smoke test fails.
+- Keep release publication gated on every installer and validation job; 0.1.0 and 0.1.1 tags were not published.
+
+## 0.1.1 — Download, GPU and runtime fixes
 
 - Fix compressed model metadata downloads while preserving publisher size, checksum and truncated-transfer checks.
 - Honor the selected GPU for MDX/ONNX inference and reject silent CUDA-to-CPU provider fallback.

@@ -1166,7 +1166,7 @@
           "type": "string"
         },
         "container_image": {
-          "default": "separator-engine:0.1.1",
+          "default": "separator-engine:0.1.2",
           "title": "Container Image",
           "type": "string"
         }
