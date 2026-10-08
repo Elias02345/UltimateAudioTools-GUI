@@ -54,6 +54,7 @@ def smoke(application: Path, report: Path):
     while native_port == server_port:
         native_port = port()
     server = f"http://127.0.0.1:{server_port}"
+    native_server = f"http://127.0.0.1:{native_port}"
     session = None
     window = None
     with tempfile.TemporaryDirectory(prefix="Separator fresh package café ") as temp:
@@ -101,7 +102,10 @@ def smoke(application: Path, report: Path):
                     headers={"Content-Type": "application/json"},
                 )
                 session = json.loads(urllib.request.urlopen(request, timeout=90).read())["value"]["sessionId"]
-                window = NativeWindow(session, server)
+                # tauri-driver maps launch capabilities and preserves the native session ID.
+                # Use WebKit directly afterward to avoid its forwarding connection resets.
+                # Never retry mutating commands through either endpoint.
+                window = NativeWindow(session, native_server)
                 window.wait_text("Recommended setup", seconds=90)
                 assert window.js("return location.href").startswith("tauri://localhost"), (
                     "Development URL used"
@@ -190,7 +194,7 @@ def smoke(application: Path, report: Path):
                             "--session-file",
                             str(session_file),
                             "--server",
-                            server,
+                            native_server,
                             "--job-id",
                             job["id"],
                             "--output",
@@ -272,7 +276,7 @@ def smoke(application: Path, report: Path):
                 if session:
                     try:
                         urllib.request.urlopen(
-                            urllib.request.Request(server + "/session/" + session, method="DELETE"),
+                            urllib.request.Request(native_server + "/session/" + session, method="DELETE"),
                             timeout=15,
                         ).close()
                     except OSError:

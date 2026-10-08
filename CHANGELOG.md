@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.7 — Projects, support and updates
+## 0.1.8 — Projects, support and updates
 
 - Create, rename, archive and restore projects; assign new generations and move existing results without moving or deleting audio.
 - Remember the current project, select multiple results for batch export, and scope Library history cleanup to its visible results.
@@ -13,7 +13,8 @@
 - Use only Elias’s first name and first-person creator/support messages.
 - Keep exact checksum-verified Microsoft license originals in the repository so Windows packaging works without downloading them on every build.
 - Preserve separation quality, Ultra models, custom ensembles and original audio files.
-- The 0.1.6 candidate was not published.
+- Create native test sessions through tauri-driver, then execute every assertion directly through WebKitWebDriver, retaining all real separation/playback/export checks.
+- The 0.1.6 and 0.1.7 candidates were not published.
 
 ## 0.1.5 — Results, editing and export
 

@@ -37,8 +37,10 @@ A host NVIDIA 615.71.09 display-driver hang temporarily blocked an additional is
 The Linux production-window check now performs real Fast CPU inference on a six-second generated recording, then tests the full result export workflow, including overlapping-playback prevention and dialog keyboard behavior.
 
 
-## Projects, support and updates (0.1.7)
+## Projects, support and updates (0.1.8)
 
 A real native development window passed project creation, new/existing generation assignment, persistence, rename, archive/restore and safe removal. Two genuine CPU separations produced stems used for audible single-stem playback, muted-stem recovery, switching, all-stem playback and exact multi-result batch export. Original recording/stem hashes remained identical. Support addresses/contributor attribution, the real native signed-update checker and 900 × 640 layout checks passed. Native CI repeats these workflows against the actual packaged application. Frontend tests cover updater progress, offline errors, installation safety, resource cleanup, donation links and address copying; backend tests cover legacy state, atomic project changes and scoped history cleanup.
 
 Creator/support messages use only Elias’s first name and his first-person voice, documented in `PRODUCT.md`. The 0.1.6 release candidate was canceled before publication. Windows packaging previously received HTTP 403 for an original Microsoft license document; both exact checksum-verified originals are now retained in the repository and verified before CRT staging.
+
+The 0.1.7 Linux release gate encountered two WebDriver forwarding connection resets, first while polling IPC and then reading a trim field. The harness now uses tauri-driver only to launch/map capabilities and sends subsequent requests to WebKitWebDriver with the unchanged session ID. Complete local result/project workflows passed through this direct connection, including a new real CPU separation and unchanged original-file hashes. No mutating request is retried and no assertion is skipped. Packaged validation remains required before publication.
